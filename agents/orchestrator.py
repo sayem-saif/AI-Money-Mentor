@@ -115,7 +115,29 @@ def _get_openrouter_api_keys() -> list[str]:
         if key not in seen:
             deduped.append(key)
             seen.add(key)
-    return deduped
+
+    # Guard against template placeholders and malformed values.
+    valid: list[str] = []
+    rejected: list[str] = []
+    for key in deduped:
+        lowered = key.lower()
+        if lowered.startswith("your_") or lowered.startswith("<") or lowered.endswith("_here"):
+            rejected.append("placeholder value")
+            continue
+        if not key.startswith("sk-or-v1-"):
+            rejected.append("must start with sk-or-v1-")
+            continue
+        valid.append(key)
+
+    if not valid and deduped:
+        raise RuntimeError(
+            "OpenRouter key is not valid. Please set OPENROUTER_API_KEY to a real sk-or-v1 key in .env"
+        )
+
+    if rejected:
+        print(f"[Orchestrator] Ignored {len(rejected)} invalid OpenRouter key entries.")
+
+    return valid
 
 
 def _run_openrouter_model(user_data: Dict[str, Any]) -> Dict[str, Any]:

@@ -113,7 +113,14 @@ function renderResults(data) {
   actions.innerHTML = "";
   (data.priority_actions || []).forEach((action) => {
     const li = document.createElement("li");
-    li.textContent = action;
+    if (typeof action === "string") {
+      li.textContent = action;
+    } else if (action && typeof action === "object") {
+      const label = action.priority ? `[${action.priority}] ` : "";
+      li.textContent = `${label}${action.action || action.step || "Action item"}`;
+    } else {
+      li.textContent = String(action || "Action item");
+    }
     actions.appendChild(li);
   });
 
