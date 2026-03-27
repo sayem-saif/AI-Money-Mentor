@@ -205,7 +205,10 @@
 
       <section id="tab-2" class="tab-pane">
         <section class="card">
-          <h2>Tax Wizard Agent</h2>
+          <div class="form-header">
+            <h2>Tax Wizard Agent</h2>
+            <button type="button" id="load-tax-demo-data" class="demo-btn">Load Demo Data</button>
+          </div>
           <form id="tax-form">
             <div class="grid two">
               <label>
@@ -225,6 +228,26 @@
               <label>
                 Home Loan Interest (₹)
                 <input type="number" name="home_loan_interest" min="0" value="0" />
+              </label>
+            </div>
+            <div class="grid two">
+              <label>
+                NPS Contribution (₹)
+                <input type="number" name="nps_contribution" min="0" max="50000" value="0" />
+              </label>
+              <label>
+                City Type
+                <select name="city_type" required>
+                  <option value="">Select City Type</option>
+                  <option value="metro">Metro</option>
+                  <option value="non-metro">Non-Metro</option>
+                </select>
+              </label>
+            </div>
+            <div class="grid two">
+              <label>
+                Monthly Rent (₹)
+                <input type="number" name="monthly_rent" min="0" value="0" />
               </label>
             </div>
             <button type="submit" class="primary-btn">Run Tax Wizard</button>
