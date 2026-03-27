@@ -5,9 +5,9 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
 
-from agents import run_orchestration
+from agents import run_orchestration, run_orchestration_with_model
 
-load_dotenv()
+load_dotenv(override=True)
 
 app = Flask(__name__)
 CORS(app)
@@ -36,7 +36,27 @@ def analyze() -> Any:
 
     try:
         print("[API] Starting AI Money Mentor multi-agent analysis...")
-        report = run_orchestration(payload)
+        use_model_mode = os.getenv("USE_MODEL_AGENT", "true").strip().lower() == "true"
+        if use_model_mode:
+            print("[API] Using OpenRouter model orchestration mode...")
+            try:
+                report = run_orchestration_with_model(payload)
+            except Exception as model_exc:
+                print(f"[API] Model chain failed: {model_exc}")
+                deterministic_fallback = (
+                    os.getenv("ALLOW_DETERMINISTIC_FALLBACK", "false").strip().lower() == "true"
+                )
+                if deterministic_fallback:
+                    print("[API] Falling back to deterministic local orchestration...")
+                    report = run_orchestration(payload)
+                    report["model_provider"] = "deterministic-fallback"
+                    report["model_used"] = "local-python-tools"
+                    report["fallback_reason"] = str(model_exc)
+                else:
+                    raise
+        else:
+            print("[API] Using deterministic orchestration mode...")
+            report = run_orchestration(payload)
         print("[API] Analysis complete.")
         return jsonify(report)
     except Exception as exc:
@@ -53,7 +73,7 @@ def analyze() -> Any:
 
 
 if __name__ == "__main__":
-    api_key = os.getenv("GEMINI_API_KEY", "")
+    api_key = os.getenv("OPENROUTER_API_KEY", "")
     if not api_key:
-        print("[Startup] Warning: GEMINI_API_KEY is not set in .env")
+        print("[Startup] Warning: OPENROUTER_API_KEY is not set in .env")
     app.run(host="0.0.0.0", port=5000, debug=True)

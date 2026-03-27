@@ -20,7 +20,6 @@ AI Money Mentor is a multi-agent personal finance advisory system built for **ET
 
 - Python 3.10+
 - Google ADK (`google-adk`)
-- Gemini API client (`google-generativeai`)
 - Flask + Flask-CORS
 - HTML, CSS, JavaScript (single page UI)
 - python-dotenv
@@ -59,9 +58,13 @@ ai-money-mentor/
    ```bash
    pip install -r requirements.txt
    ```
-3. Create `.env` from `.env.example` and add your Gemini API key:
+3. Create `.env` from `.env.example` and add your OpenRouter settings:
    ```env
-   GEMINI_API_KEY=your_key_here
+   OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+   OPENROUTER_API_KEY=your_sk-or-v1_key
+   OPENROUTER_MODEL=openai/gpt-oss-20b
+   OPENROUTER_SITE_URL=https://your-site.example
+   OPENROUTER_APP_NAME=AI Money Mentor
    ```
 4. Start the app:
    ```bash
@@ -81,6 +84,12 @@ ai-money-mentor/
 
 - `GET /health` -> `{ "status": "ok" }`
 - `POST /api/analyze` -> full structured finance advisory report
+
+## Model Fallback Chain
+
+- Provider: OpenRouter only (`OPENROUTER_API_KEY` / `OPENROUTER_API_KEYS`)
+- Optional multi-key rotation using `OPENROUTER_API_KEYS`
+- Optional final local fallback: set `ALLOW_DETERMINISTIC_FALLBACK=true`
 
 
 ## Team
