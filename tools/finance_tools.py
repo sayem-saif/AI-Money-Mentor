@@ -537,9 +537,31 @@ def compare_tax_regimes(inputs: Dict[str, Any]) -> Dict[str, Any]:
     deductions_80c = max(0.0, safe_float(inputs.get("deductions_80c"), 0.0))
     hra_exemption = max(0.0, safe_float(inputs.get("hra_exemption"), 0.0))
     home_loan_interest = max(0.0, safe_float(inputs.get("home_loan_interest"), 0.0))
+    nps_contribution = max(0.0, min(50000.0, safe_float(inputs.get("nps_contribution"), 0.0)))
+    city_type = (inputs.get("city_type") or "metro").lower()
+    monthly_rent = max(0.0, safe_float(inputs.get("monthly_rent"), 0.0))
+    
+    # Calculate HRA more accurately based on city type and rent
+    if monthly_rent > 0 and hra_exemption == 0:
+        # HRA exemption = minimum of (i) actual HRA, (ii) 50% of basic (but we'll use 40-50% based on metro)
+        # For Metro: typically 50%, Non-metro: 40%
+        hra_percentage = 0.50 if city_type == "metro" else 0.40
+        calculated_hra = min(monthly_rent * 12, annual_income * hra_percentage)
+        hra_exemption = calculated_hra
 
-    old_taxable = max(0.0, _old_regime_taxable_income(annual_income, deductions_80c, hra_exemption) - min(home_loan_interest, 200000.0))
-    new_taxable = _new_regime_taxable_income(annual_income)
+    old_gross_income = annual_income
+    old_hra = hra_exemption
+    old_80c = min(deductions_80c, TAX_80C_LIMIT)
+    old_nps = min(nps_contribution, 50000.0)
+    old_standard_deduction = 75000.0
+    old_home_loan = min(home_loan_interest, 200000.0)
+    
+    old_taxable = max(0.0, annual_income - old_hra - old_standard_deduction - old_80c - old_nps - old_home_loan)
+    
+    new_gross_income = annual_income
+    new_nps = min(nps_contribution, 50000.0)
+    new_standard_deduction = 75000.0
+    new_taxable = max(0.0, annual_income - new_standard_deduction - new_nps)
 
     old_slabs = [(250000.0, 0.0), (500000.0, 0.05), (1000000.0, 0.2), (9999999999.0, 0.3)]
     new_slabs = [
@@ -553,8 +575,11 @@ def compare_tax_regimes(inputs: Dict[str, Any]) -> Dict[str, Any]:
 
     old_tax = _apply_tax_rebate(old_taxable, _tax_from_slabs(old_taxable, old_slabs), "old")
     new_tax = _apply_tax_rebate(new_taxable, _tax_from_slabs(new_taxable, new_slabs), "new")
-    old_tax_with_cess = old_tax * 1.04
-    new_tax_with_cess = new_tax * 1.04
+    
+    old_education_cess = old_tax * 0.04
+    new_education_cess = new_tax * 0.04
+    old_tax_with_cess = old_tax + old_education_cess
+    new_tax_with_cess = new_tax + new_education_cess
 
     recommended_regime = "old" if old_tax_with_cess < new_tax_with_cess else "new"
     tax_saved = abs(old_tax_with_cess - new_tax_with_cess)
@@ -572,14 +597,28 @@ def compare_tax_regimes(inputs: Dict[str, Any]) -> Dict[str, Any]:
             "deductions_80c": deductions_80c,
             "hra_exemption": hra_exemption,
             "home_loan_interest": home_loan_interest,
+            "nps_contribution": nps_contribution,
+            "city_type": city_type,
+            "monthly_rent": monthly_rent,
         },
         "old_regime": {
+            "gross_income": round(old_gross_income, 2),
+            "hra_exemption": round(old_hra, 2),
+            "deductions_80c": round(old_80c, 2),
+            "nps_contribution": round(old_nps, 2),
+            "home_loan_interest": round(old_home_loan, 2),
             "taxable_income": round(old_taxable, 2),
+            "tax_before_cess": round(old_tax, 2),
+            "education_cess": round(old_education_cess, 2),
             "tax_payable": round(old_tax_with_cess, 2),
             "tax_payable_inr": format_inr(old_tax_with_cess),
         },
         "new_regime": {
+            "gross_income": round(new_gross_income, 2),
+            "nps_contribution": round(new_nps, 2),
             "taxable_income": round(new_taxable, 2),
+            "tax_before_cess": round(new_tax, 2),
+            "education_cess": round(new_education_cess, 2),
             "tax_payable": round(new_tax_with_cess, 2),
             "tax_payable_inr": format_inr(new_tax_with_cess),
         },
@@ -587,6 +626,8 @@ def compare_tax_regimes(inputs: Dict[str, Any]) -> Dict[str, Any]:
         "tax_saved": round(tax_saved, 2),
         "tax_saved_inr": format_inr(tax_saved),
         "tax_plan": plan,
+        "claimed_80d": False,
+        "claimed_80g": False,
         "section_80c_suggestions": [
             "ELSS for tax + equity growth",
             "PPF for long-term safety",

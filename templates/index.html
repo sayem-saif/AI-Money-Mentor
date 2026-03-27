@@ -26,6 +26,7 @@
           A complete multi-agent financial copilot with planning, tax intelligence,
           portfolio diagnostics, and transparent audit history.
         </p>
+        <p class="powered-by">Powered by Google ADK · Gemini 2.0 Flash · 4 Specialized Agents</p>
       </header>
 
       <section class="tabs card">
@@ -37,42 +38,45 @@
 
       <section id="tab-1" class="tab-pane active">
         <section class="card form-card">
-          <h2>Step 1 · Share Your Financial Snapshot</h2>
+          <div class="form-header">
+            <h2>Step 1 · Share Your Financial Snapshot</h2>
+            <button type="button" id="load-demo-data" class="demo-btn">Load Demo Data</button>
+          </div>
           <form id="mentor-form">
             <div class="grid two">
               <label>
                 Full Name
-                <input type="text" name="name" placeholder="Arjun Sharma" required />
+                <input type="text" name="name" placeholder="e.g. Arjun Sharma" required />
               </label>
               <label>
                 Age
-                <input type="number" name="age" min="18" max="75" required />
+                <input type="number" name="age" min="18" max="75" placeholder="e.g. 28" required />
               </label>
             </div>
 
             <div class="grid two">
               <label>
                 Monthly Income (₹)
-                <input type="number" name="monthly_income" min="0" required />
+                <input type="number" name="monthly_income" min="0" placeholder="e.g. 75000" required />
               </label>
               <label>
                 Monthly Expenses (₹)
-                <input type="number" name="monthly_expenses" min="0" required />
+                <input type="number" name="monthly_expenses" min="0" placeholder="e.g. 45000" required />
               </label>
             </div>
 
             <div class="grid three">
               <label>
                 Existing Savings (₹)
-                <input type="number" name="existing_savings" min="0" value="0" />
+                <input type="number" name="existing_savings" min="0" value="0" placeholder="e.g. 50000" />
               </label>
               <label>
                 Existing Investments (₹)
-                <input type="number" name="existing_investments" min="0" value="0" />
+                <input type="number" name="existing_investments" min="0" value="0" placeholder="e.g. 200000" />
               </label>
               <label>
                 Emergency Fund (₹)
-                <input type="number" name="emergency_fund" min="0" value="0" />
+                <input type="number" name="emergency_fund" min="0" value="0" placeholder="e.g. 30000" />
               </label>
             </div>
 
@@ -126,15 +130,10 @@
             <article class="card score-card">
               <h2>Money Health Score</h2>
               <div class="gauge-wrap">
-                <svg viewBox="0 0 120 120" class="gauge" aria-hidden="true">
-                  <circle cx="60" cy="60" r="52" class="gauge-track"></circle>
-                  <circle cx="60" cy="60" r="52" class="gauge-value" id="gauge-value"></circle>
-                </svg>
-                <p id="health-score-value">0</p>
-              </div>
-              <div id="score-breakdown"></div>
-            </article>
-
+              <canvas id="healthScoreGauge" width="200" height="120"></canvas>
+              <p id="health-score-label">Money Health Score / 100</p>
+            </div>
+            <div id="score-bars" class="score-bars"></div>
             <article class="card fire-card">
               <h2>FIRE Summary</h2>
               <div id="fire-summary"></div>
@@ -262,10 +261,14 @@
           <p class="subhead">Every analysis is logged with input snapshot, endpoint used, and summarized result metadata.</p>
           <button id="refresh-audit" type="button" class="ghost-btn">Refresh Audit Log</button>
         </section>
-        <section id="audit-results" class="card hidden"></section>
+        <section id="audit-results" class="card hidden">
+          <p id="audit-empty-msg">No audit entries yet. Run a Financial Health analysis or Tax Wizard first — every agent decision will be logged here automatically.</p>
+          <div id="audit-entries"></div>
+        </section>
       </section>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/static/script.js"></script>
   </body>
 </html>

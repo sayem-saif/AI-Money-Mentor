@@ -85,6 +85,53 @@ body {
   max-width: 760px;
 }
 
+.powered-by {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 6px 14px;
+  background: rgba(0, 212, 170, 0.15);
+  border: 1px solid rgba(0, 212, 170, 0.4);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  color: rgba(0, 212, 170, 0.9);
+}
+
+.demo-btn {
+  display: inline-block;
+  padding: 8px 12px;
+  margin-left: 12px;
+  background: rgba(0, 212, 170, 0.2);
+  border: 1px solid rgba(0, 212, 170, 0.5);
+  border-radius: 8px;
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.demo-btn:hover {
+  background: rgba(0, 212, 170, 0.3);
+}
+
+.form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.form-header h2 {
+  margin: 0;
+}
+
+small {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--line);
@@ -235,37 +282,56 @@ select {
   position: relative;
 }
 
-.gauge {
-  width: 100%;
-  transform: rotate(-90deg);
+#healthScoreGauge {
+  display: block;
+  margin: 0 auto;
 }
 
-.gauge-track,
-.gauge-value {
-  fill: none;
-  stroke-width: 10;
+#health-score-label {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 8px;
 }
 
-.gauge-track {
-  stroke: rgba(255, 255, 255, 0.14);
+.score-bars {
+  margin-top: 16px;
 }
 
-.gauge-value {
-  stroke: var(--accent);
-  stroke-linecap: round;
-  stroke-dasharray: 327;
-  stroke-dashoffset: 327;
-  transition: stroke-dashoffset 0.7s ease, stroke 0.35s ease;
+.score-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
 }
 
-#health-score-value {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-family: "Sora", sans-serif;
-  font-size: 2.2rem;
-  font-weight: 800;
+.score-bar-label {
+  min-width: 200px;
+  color: var(--muted);
+}
+
+.score-bar-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.score-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 1.5s ease;
+  width: 0%;
+}
+
+.score-bar-value {
+  min-width: 60px;
+  text-align: right;
+  color: var(--text);
+  font-weight: 600;
 }
 
 .score-row {
@@ -365,6 +431,183 @@ td {
   padding: 12px;
   margin-bottom: 12px;
   background: rgba(255, 255, 255, 0.03);
+}
+
+.tax-results-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tax-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.tax-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tax-card h3 {
+  margin-top: 0;
+  color: var(--text);
+}
+
+.accordion {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.accordion-btn {
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  text-align: left;
+  transition: background 0.2s ease;
+}
+
+.accordion-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.accordion-btn.active {
+  background: rgba(0, 212, 170, 0.15);
+}
+
+.accordion-content {
+  display: none;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border-top: 1px solid var(--line);
+}
+
+.accordion-content.active {
+  display: block;
+}
+
+.calculation-step {
+  margin: 8px 0;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.calculation-step:last-child {
+  border-bottom: none;
+}
+
+.calculation-step strong {
+  color: var(--text);
+}
+
+.calculation-step .step-value {
+  float: right;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tax-summary {
+  text-align: center;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+}
+
+.tax-amount {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--accent);
+  margin: 0;
+}
+
+.verdict-banner {
+  grid-column: 1 / -1;
+  padding: 14px;
+  border-radius: 10px;
+  text-align: center;
+  font-weight: 700;
+  color: white;
+  margin: -4px 0 0 0;
+}
+
+.verdict-banner.green {
+  background: linear-gradient(135deg, #00d4aa, #00a387);
+}
+
+.verdict-banner.blue {
+  background: linear-gradient(135deg, #4a90e2, #357abd);
+}
+
+.missed-deductions-section,
+.instruments-section {
+  display: grid;
+  gap: 10px;
+}
+
+.missed-deduction-card {
+  padding: 12px;
+  background: rgba(255, 179, 71, 0.15);
+  border-left: 3px solid #ffb347;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.missed-deduction-card strong {
+  color: #ffb347;
+}
+
+.instruments-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.instruments-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.instrument-card {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+.instrument-card h4 {
+  margin: 0 0 6px 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.instrument-card p {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.instrument-card .label {
+  display: inline-block;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  font-weight: 600;
 }
 
 .audit-row {

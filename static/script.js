@@ -126,15 +126,48 @@ function startLoadingAnimation() {
 }
 
 function renderGauge(score) {
-  const valueEl = document.getElementById("health-score-value");
-  const ring = document.getElementById("gauge-value");
+  const canvas = document.getElementById("healthScoreGauge");
+  if (!canvas) return;
+  
+  const ctx = canvas.getContext("2d");
   const capped = Math.max(0, Math.min(100, Number(score || 0)));
-  const circumference = 327;
-  const offset = circumference - (capped / 100) * circumference;
-
-  ring.style.strokeDashoffset = String(offset);
-  ring.style.stroke = capped >= 70 ? "#00d4aa" : capped >= 40 ? "#ffb347" : "#ff6b6b";
-  valueEl.textContent = String(capped);
+  
+  // Clear canvas
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  const radius = 50;
+  
+  // Determine color based on score
+  let fillColor = capped >= 70 ? "#00d4aa" : capped >= 40 ? "#ffb347" : "#ff6b6b";
+  let bgColor = "rgba(255, 255, 255, 0.08)";
+  
+  // Draw background semicircle
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, Math.PI, 0, false);
+  ctx.lineWidth = 12;
+  ctx.strokeStyle = bgColor;
+  ctx.stroke();
+  
+  // Draw filled semicircle based on score
+  const angle = Math.PI + (Math.PI * capped) / 100;
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, Math.PI, angle, false);
+  ctx.lineWidth = 12;
+  ctx.strokeStyle = fillColor;
+  ctx.stroke();
+  
+  // Draw center text
+  ctx.font = "bold 24px Sora, sans-serif";
+  ctx.fillStyle = "#edf2ff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(String(capped), centerX, centerY - 8);
+  
+  ctx.font = "12px Sora, sans-serif";
+  ctx.fillStyle = "#9fb0d1";
+  ctx.fillText("/ 100", centerX, centerY + 8);
 }
 
 function renderScoreBreakdown(breakdown) {
@@ -151,9 +184,48 @@ function renderScoreBreakdown(breakdown) {
   });
 }
 
+function renderScoreBars(breakdown) {
+  const barsContainer = document.getElementById("score-bars");
+  if (!barsContainer) return;
+  
+  const categories = [
+    ["Emergency Preparedness", "emergency_preparedness"],
+    ["Insurance Coverage", "insurance_coverage"],
+    ["Investment Diversification", "investment_diversification"],
+    ["Debt Health", "debt_health"],
+    ["Tax Efficiency", "tax_efficiency"],
+    ["Retirement Readiness", "retirement_readiness"],
+  ];
+  
+  barsContainer.innerHTML = "";
+  
+  categories.forEach(([label, key]) => {
+    const value = Number(breakdown?.[key] || 0);
+    const maxValue = 20;
+    const percentage = (value / maxValue) * 100;
+    
+    const row = document.createElement("div");
+    row.className = "score-bar-row";
+    row.innerHTML = `
+      <div class="score-bar-label">${label}</div>
+      <div class="score-bar-track">
+        <div class="score-bar-fill" style="width: 0%;"></div>
+      </div>
+      <div class="score-bar-value">${value}/${maxValue}</div>
+    `;
+    barsContainer.appendChild(row);
+    
+    // Animate bars
+    requestAnimationFrame(() => {
+      row.querySelector(".score-bar-fill").style.width = percentage + "%";
+    });
+  });
+}
+
 function renderResults(data) {
   renderGauge(data.health_score);
   renderScoreBreakdown(data.score_breakdown || {});
+  renderScoreBars(data.score_breakdown || {});
 
   const fire = data.fire_data || {};
   document.getElementById("fire-summary").innerHTML = `
@@ -220,6 +292,127 @@ function renderResults(data) {
   document.getElementById("motivation-text").textContent = data.motivational_message || "";
 }
 
+function loadDemoData() {
+  document.querySelector("input[name='name']").value = "Arjun Sharma";
+  document.querySelector("input[name='age']").value = "34";
+  document.querySelector("input[name='monthly_income']").value = "200000";
+  document.querySelector("input[name='monthly_expenses']").value = "80000";
+  document.querySelector("input[name='existing_savings']").value = "50000";
+  document.querySelector("input[name='existing_investments']").value = "1800000";
+  document.querySelector("input[name='emergency_fund']").value = "30000";
+  document.querySelector("select[name='risk_appetite']").value = "moderate";
+  document.querySelector("input[name='has_term_insurance']").value = "false";
+  document.querySelector("input[name='has_health_insurance']").value = "true";
+  
+  goalsList.innerHTML = "";
+  addGoalRow({ name: "Emergency Fund Top-up", target_amount: 270000, years: 1 });
+  addGoalRow({ name: "Europe Trip", target_amount: 300000, years: 2 });
+  addGoalRow({ name: "Home Down Payment", target_amount: 2000000, years: 7 });
+  addGoalRow({ name: "Retirement Corpus", target_amount: 30000000, years: 16 });
+}
+
+function loadDemoDataTax() {
+  document.querySelector("input[name='annual_income']").value = "1800000";
+  document.querySelector("input[name='deductions_80c']").value = "150000";
+  document.querySelector("input[name='hra_exemption']").value = "360000";
+  document.querySelector("input[name='home_loan_interest']").value = "40000";
+  document.querySelector("input[name='nps_contribution']").value = "50000";
+  document.querySelector("select[name='city_type']").value = "metro";
+  document.querySelector("input[name='monthly_rent']").value = "30000";
+}
+
+function renderTaxResults(data) {
+  const oldSteps = document.getElementById("old-steps");
+  const newSteps = document.getElementById("new-steps");
+  const verdictBanner = document.getElementById("verdict-banner");
+  const missedDeductions = document.getElementById("missed-deductions");
+  const recommendedInstruments = document.getElementById("recommended-instruments");
+  const taxResults = document.getElementById("tax-results");
+  
+  const oldRegime = data.old_regime || {};
+  const newRegime = data.new_regime || {};
+  
+  oldSteps.innerHTML = `
+    <div class="calculation-step"><strong>Step 1:</strong> Gross Income <span class="step-value">${formatINR(oldRegime.gross_income || 0)}</span></div>
+    <div class="calculation-step"><strong>Step 2:</strong> HRA Exemption (calculated) <span class="step-value">${formatINR(oldRegime.hra_exemption || 0)}</span></div>
+    <div class="calculation-step"><strong>Step 3:</strong> Standard Deduction <span class="step-value">₹75,000</span></div>
+    <div class="calculation-step"><strong>Step 4:</strong> 80C Deduction <span class="step-value">${formatINR(oldRegime.deductions_80c || 0)}</span></div>
+    <div class="calculation-step"><strong>Step 5:</strong> NPS 80CCD(1B) <span class="step-value">${formatINR(oldRegime.nps_contribution || 0)}</span></div>
+    <div class="calculation-step"><strong>Step 6:</strong> Home Loan Interest (Sec 24) <span class="step-value">${formatINR(oldRegime.home_loan_interest || 0)}</span></div>
+    <div class="calculation-step"><strong>Step 7:</strong> Taxable Income <span class="step-value">${formatINR(oldRegime.taxable_income || 0)}</span></div>
+    <div class="calculation-step"><strong>Step 8:</strong> Tax on slabs <span class="step-value">${formatINR(oldRegime.tax_before_cess || 0)}</span></div>
+    <div class="calculation-step"><strong>Step 9:</strong> Education Cess (4%) <span class="step-value">${formatINR(oldRegime.education_cess || 0)}</span></div>
+    <div class="calculation-step" style="border-bottom: 2px solid var(--accent); padding-top: 8px; margin-top: 8px;"><strong>TOTAL TAX</strong> <span class="step-value" style="font-size: 1.2rem;">${formatINR(oldRegime.tax_payable || 0)}</span></div>
+  `;
+  
+  newSteps.innerHTML = `
+    <div class="calculation-step"><strong>Step 1:</strong> Gross Income <span class="step-value">${formatINR(newRegime.gross_income || 0)}</span></div>
+    <div class="calculation-step"><strong>Step 2:</strong> No HRA Exemption (New regime) <span class="step-value">₹0</span></div>
+    <div class="calculation-step"><strong>Step 3:</strong> Standard Deduction <span class="step-value">₹75,000</span></div>
+    <div class="calculation-step"><strong>Step 4:</strong> 80C Deduction <span class="step-value">₹0 (not allowed)</span></div>
+    <div class="calculation-step"><strong>Step 5:</strong> NPS 80CCD(1B) <span class="step-value">${formatINR(newRegime.nps_contribution || 0)}</span></div>
+    <div class="calculation-step"><strong>Step 6:</strong> Home Loan Interest (Sec 24) <span class="step-value">₹0 (not allowed)</span></div>
+    <div class="calculation-step"><strong>Step 7:</strong> Taxable Income <span class="step-value">${formatINR(newRegime.taxable_income || 0)}</span></div>
+    <div class="calculation-step"><strong>Step 8:</strong> Tax on slabs <span class="step-value">${formatINR(newRegime.tax_before_cess || 0)}</span></div>
+    <div class="calculation-step"><strong>Step 9:</strong> Education Cess (4%) <span class="step-value">${formatINR(newRegime.education_cess || 0)}</span></div>
+    <div class="calculation-step" style="border-bottom: 2px solid var(--accent); padding-top: 8px; margin-top: 8px;"><strong>TOTAL TAX</strong> <span class="step-value" style="font-size: 1.2rem;">${formatINR(newRegime.tax_payable || 0)}</span></div>
+  `;
+  
+  document.getElementById("old-tax-display").textContent = oldRegime.tax_payable_inr || formatINR(oldRegime.tax_payable || 0);
+  document.getElementById("new-tax-display").textContent = newRegime.tax_payable_inr || formatINR(newRegime.tax_payable || 0);
+  
+  const oldTax = Number(oldRegime.tax_payable || 0);
+  const newTax = Number(newRegime.tax_payable || 0);
+  const savings = oldTax - newTax;
+  const isBetter = savings > 0;
+  
+  verdictBanner.className = isBetter ? "verdict-banner green" : "verdict-banner blue";
+  verdictBanner.textContent = isBetter 
+    ? `✅ New Regime saves you ${formatINR(savings)} this year`
+    : `✅ Old Regime saves you ${formatINR(Math.abs(savings))} this year`;
+  
+  const missedList = [];
+  if (!data.claimed_80d) missedList.push({ code: "80D", desc: "Health Insurance", saving: 25000 });
+  if (!data.claimed_80g) missedList.push({ code: "80G", desc: "Charitable Donation", saving: 50000 });
+  
+  if (missedList.length) {
+    missedDeductions.innerHTML = "<h4 style='margin: 0 0 8px 0; color: #ffb347;'>⚠️ Missed Deductions</h4>" +
+      missedList.map(m => `<div class="missed-deduction-card"><strong>${m.code}</strong> (${m.desc}) — could save up to ₹${m.saving.toLocaleString('en-IN')}</div>`).join("");
+  } else {
+    missedDeductions.innerHTML = "";
+  }
+  
+  recommendedInstruments.innerHTML = `
+    <h4 style='margin: 8px 0; color: var(--muted);'>Recommended Tax-Saving Instruments</h4>
+    <div class="instruments-grid">
+      <div class="instrument-card">
+        <h4>ELSS Mutual Fund</h4>
+        <p>Tax saving + wealth creation</p>
+        <p><span class="label">Risk:</span> Medium</p>
+        <p><span class="label">Lock-in:</span> 3 years</p>
+        <p><span class="label">Liquidity:</span> Medium</p>
+      </div>
+      <div class="instrument-card">
+        <h4>PPF</h4>
+        <p>Safest tax saving option</p>
+        <p><span class="label">Risk:</span> None</p>
+        <p><span class="label">Lock-in:</span> 15 years</p>
+        <p><span class="label">Liquidity:</span> Low</p>
+      </div>
+      <div class="instrument-card">
+        <h4>NPS Tier 1</h4>
+        <p>Extra ₹50K deduction under 80CCD(1B)</p>
+        <p><span class="label">Risk:</span> Medium</p>
+        <p><span class="label">Lock-in:</span> Till retirement</p>
+        <p><span class="label">Liquidity:</span> Low</p>
+      </div>
+    </div>
+  `;
+  
+  taxResults.classList.remove("hidden");
+  taxResults.scrollIntoView({ behavior: "smooth" });
+}
+
 function collectGoals() {
   const rows = [...goalsList.querySelectorAll(".goal-row")];
   return rows
@@ -273,13 +466,19 @@ async function loadAuditTrail() {
     }
 
     const logs = data.logs || [];
+    const auditResults = document.getElementById("audit-results");
+    const auditEmptyMsg = document.getElementById("audit-empty-msg");
+    const auditEntries = document.getElementById("audit-entries");
+    
     auditResults.classList.remove("hidden");
     if (!logs.length) {
-      auditResults.innerHTML = "<p>No audit entries yet.</p>";
+      auditEmptyMsg.style.display = "block";
+      auditEntries.innerHTML = "";
       return;
     }
 
-    auditResults.innerHTML = logs
+    auditEmptyMsg.style.display = "none";
+    auditEntries.innerHTML = logs
       .map(
         (log) => `
       <div class="audit-row">
@@ -290,6 +489,7 @@ async function loadAuditTrail() {
       )
       .join("");
   } catch (error) {
+    const auditResults = document.getElementById("audit-results");
     auditResults.classList.remove("hidden");
     auditResults.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
   }
@@ -369,6 +569,7 @@ recalculateBtn.addEventListener("click", async () => {
     }
     renderGauge(data.health_score);
     renderScoreBreakdown(data.score_breakdown || {});
+    renderScoreBars(data.score_breakdown || {});
     const fire = data.fire_data || {};
     document.getElementById("fire-summary").innerHTML = `
       <p><strong>FIRE Number:</strong> ${fire.fire_number_inr || formatINR(fire.fire_number)}</p>
@@ -389,6 +590,9 @@ taxForm.addEventListener("submit", async (event) => {
     deductions_80c: Number(formData.get("deductions_80c") || 0),
     hra_exemption: Number(formData.get("hra_exemption") || 0),
     home_loan_interest: Number(formData.get("home_loan_interest") || 0),
+    nps_contribution: Number(formData.get("nps_contribution") || 0),
+    city_type: formData.get("city_type"),
+    monthly_rent: Number(formData.get("monthly_rent") || 0),
   };
 
   try {
@@ -402,17 +606,7 @@ taxForm.addEventListener("submit", async (event) => {
       throw new Error(data.error || "Tax wizard failed.");
     }
 
-    taxResults.classList.remove("hidden");
-    taxResults.innerHTML = `
-      <h3>Comparison Result</h3>
-      <p><strong>Old Regime Tax:</strong> ${data.old_regime.tax_payable_inr}</p>
-      <p><strong>New Regime Tax:</strong> ${data.new_regime.tax_payable_inr}</p>
-      <p><strong>Recommended:</strong> ${String(data.recommended_regime || "").toUpperCase()} regime</p>
-      <p><strong>Potential Tax Saved:</strong> ${data.tax_saved_inr}</p>
-      <h4>Suggested Tax Plan</h4>
-      <ul>${(data.tax_plan || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
-      <p class="section-disclaimer">Educational simulation only. Consult a SEBI-registered advisor for personalized advice.</p>
-    `;
+    renderTaxResults(data);
   } catch (error) {
     taxResults.classList.remove("hidden");
     taxResults.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
@@ -492,6 +686,17 @@ addFundBtn.addEventListener("click", () => addFundRow());
   const el = document.getElementById(id);
   if (el) {
     el.addEventListener("input", updateSliderLabels);
+  }
+});
+
+document.getElementById("load-demo-data")?.addEventListener("click", loadDemoData);
+document.getElementById("load-tax-demo-data")?.addEventListener("click", loadDemoDataTax);
+
+// Accordion toggle for tax results
+document.addEventListener("click", (e) => {
+  if (e.target.classList.contains("accordion-btn")) {
+    e.target.classList.toggle("active");
+    e.target.nextElementSibling.classList.toggle("active");
   }
 });
 
