@@ -315,11 +315,13 @@ function loadDemoData() {
   if (termEl) termEl.value = "false";
   if (healthEl) healthEl.value = "true";
   
-  goalsList.innerHTML = "";
-  addGoalRow({ name: "Emergency Fund Top-up", target_amount: 270000, years: 1 });
-  addGoalRow({ name: "Europe Trip", target_amount: 300000, years: 2 });
-  addGoalRow({ name: "Home Down Payment", target_amount: 2000000, years: 7 });
-  addGoalRow({ name: "Retirement Corpus", target_amount: 30000000, years: 16 });
+  if (goalsList) {
+    goalsList.innerHTML = "";
+    addGoalRow({ name: "Emergency Fund Top-up", target_amount: 270000, years: 1 });
+    addGoalRow({ name: "Europe Trip", target_amount: 300000, years: 2 });
+    addGoalRow({ name: "Home Down Payment", target_amount: 2000000, years: 7 });
+    addGoalRow({ name: "Retirement Corpus", target_amount: 30000000, years: 16 });
+  }
 }
 
 function loadDemoDataTax() {
