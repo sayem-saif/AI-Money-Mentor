@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Money Mentor</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -205,10 +206,7 @@
 
       <section id="tab-2" class="tab-pane">
         <section class="card">
-          <div class="form-header">
-            <h2>Tax Wizard Agent</h2>
-            <button type="button" id="load-tax-demo-data" class="demo-btn">Load Demo Data</button>
-          </div>
+          <h2>Tax Wizard Agent</h2>
           <form id="tax-form">
             <div class="grid two">
               <label>
@@ -228,26 +226,6 @@
               <label>
                 Home Loan Interest (₹)
                 <input type="number" name="home_loan_interest" min="0" value="0" />
-              </label>
-            </div>
-            <div class="grid two">
-              <label>
-                NPS Contribution (₹)
-                <input type="number" name="nps_contribution" min="0" max="50000" value="0" />
-              </label>
-              <label>
-                City Type
-                <select name="city_type" required>
-                  <option value="">Select City Type</option>
-                  <option value="metro">Metro</option>
-                  <option value="non-metro">Non-Metro</option>
-                </select>
-              </label>
-            </div>
-            <div class="grid two">
-              <label>
-                Monthly Rent (₹)
-                <input type="number" name="monthly_rent" min="0" value="0" />
               </label>
             </div>
             <button type="submit" class="primary-btn">Run Tax Wizard</button>

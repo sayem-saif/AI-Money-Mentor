@@ -18,6 +18,34 @@ const recalculateBtn = document.getElementById("recalculate-btn");
 
 let latestProfilePayload = null;
 
+async function apiFetch(path, options = {}) {
+  try {
+    return await fetch(path, options);
+  } catch (error) {
+    const currentPort = window.location.port;
+    const shouldTryFallback = currentPort !== "5000";
+    if (!shouldTryFallback) {
+      throw error;
+    }
+
+    const protocol = window.location.protocol || "http:";
+    const fallbacks = [
+      `${protocol}//127.0.0.1:5000${path}`,
+      `${protocol}//localhost:5000${path}`,
+    ];
+
+    let lastError = error;
+    for (const url of fallbacks) {
+      try {
+        return await fetch(url, options);
+      } catch (fallbackError) {
+        lastError = fallbackError;
+      }
+    }
+    throw lastError;
+  }
+}
+
 const loadingMessages = [
   "Profiling your finances...",
   "Calculating your FIRE number...",
@@ -172,6 +200,7 @@ function renderGauge(score) {
 
 function renderScoreBreakdown(breakdown) {
   const container = document.getElementById("score-breakdown");
+  if (!container) return;
   container.innerHTML = "";
   Object.entries(breakdown || {}).forEach(([label, value]) => {
     const row = document.createElement("div");
@@ -293,55 +322,42 @@ function renderResults(data) {
 }
 
 function loadDemoData() {
-  const nameEl = document.querySelector("input[name='name']");
-  const ageEl = document.querySelector("input[name='age']");
-  const incomeEl = document.querySelector("input[name='monthly_income']");
-  const expenseEl = document.querySelector("input[name='monthly_expenses']");
-  const savingsEl = document.querySelector("input[name='existing_savings']");
-  const investEl = document.querySelector("input[name='existing_investments']");
-  const emergencyEl = document.querySelector("input[name='emergency_fund']");
-  const riskEl = document.querySelector("select[name='risk_appetite']");
-  const termEl = document.querySelector("input[name='has_term_insurance']");
-  const healthEl = document.querySelector("input[name='has_health_insurance']");
+  const setIfExists = (selector, value) => {
+    const el = document.querySelector(selector);
+    if (el) el.value = value;
+  };
   
-  if (nameEl) nameEl.value = "Arjun Sharma";
-  if (ageEl) ageEl.value = "34";
-  if (incomeEl) incomeEl.value = "200000";
-  if (expenseEl) expenseEl.value = "80000";
-  if (savingsEl) savingsEl.value = "50000";
-  if (investEl) investEl.value = "1800000";
-  if (emergencyEl) emergencyEl.value = "30000";
-  if (riskEl) riskEl.value = "moderate";
-  if (termEl) termEl.value = "false";
-  if (healthEl) healthEl.value = "true";
+  setIfExists("input[name='name']", "Arjun Sharma");
+  setIfExists("input[name='age']", "34");
+  setIfExists("input[name='monthly_income']", "200000");
+  setIfExists("input[name='monthly_expenses']", "80000");
+  setIfExists("input[name='existing_savings']", "50000");
+  setIfExists("input[name='existing_investments']", "1800000");
+  setIfExists("input[name='emergency_fund']", "30000");
+  setIfExists("select[name='risk_appetite']", "moderate");
+  setIfExists("input[name='has_term_insurance']", "false");
+  setIfExists("input[name='has_health_insurance']", "true");
   
-  if (goalsList) {
-    goalsList.innerHTML = "";
-    addGoalRow({ name: "Emergency Fund Top-up", target_amount: 270000, years: 1 });
-    addGoalRow({ name: "Europe Trip", target_amount: 300000, years: 2 });
-    addGoalRow({ name: "Home Down Payment", target_amount: 2000000, years: 7 });
-    addGoalRow({ name: "Retirement Corpus", target_amount: 30000000, years: 16 });
-  }
+  goalsList.innerHTML = "";
+  addGoalRow({ name: "Emergency Fund Top-up", target_amount: 270000, years: 1 });
+  addGoalRow({ name: "Europe Trip", target_amount: 300000, years: 2 });
+  addGoalRow({ name: "Home Down Payment", target_amount: 2000000, years: 7 });
+  addGoalRow({ name: "Retirement Corpus", target_amount: 30000000, years: 16 });
 }
 
 function loadDemoDataTax() {
-  const annualEl = document.querySelector("input[name='annual_income']");
-  const deductEl = document.querySelector("input[name='deductions_80c']");
-  const hraEl = document.querySelector("input[name='hra_exemption']");
-  const loanEl = document.querySelector("input[name='home_loan_interest']");
-  const npsEl = document.querySelector("input[name='nps_contribution']");
-  const cityEl = document.querySelector("select[name='city_type']");
-  const rentEl = document.querySelector("input[name='monthly_rent']");
+  const setIfExists = (selector, value) => {
+    const el = document.querySelector(selector);
+    if (el) el.value = value;
+  };
   
-  if (annualEl) annualEl.value = "1800000";
-  if (deductEl) deductEl.value = "150000";
-  if (hraEl) hraEl.value = "360000";
-  if (loanEl) loanEl.value = "40000";
-  if (npsEl) npsEl.value = "50000";
-  if (cityEl) cityEl.value = "metro";
-  if (rentEl) rentEl.value = "30000";
-}
-  document.querySelector("input[name='monthly_rent']").value = "30000";
+  setIfExists("input[name='annual_income']", "1800000");
+  setIfExists("input[name='deductions_80c']", "150000");
+  setIfExists("input[name='hra_exemption']", "360000");
+  setIfExists("input[name='home_loan_interest']", "40000");
+  setIfExists("input[name='nps_contribution']", "50000");
+  setIfExists("select[name='city_type']", "metro");
+  setIfExists("input[name='monthly_rent']", "30000");
 }
 
 function renderTaxResults(data) {
@@ -354,6 +370,35 @@ function renderTaxResults(data) {
   
   const oldRegime = data.old_regime || {};
   const newRegime = data.new_regime || {};
+
+  const hasDetailedTaxLayout =
+    !!oldSteps &&
+    !!newSteps &&
+    !!verdictBanner &&
+    !!missedDeductions &&
+    !!recommendedInstruments;
+
+  if (!hasDetailedTaxLayout) {
+    const oldTaxText = oldRegime.tax_payable_inr || formatINR(oldRegime.tax_payable || 0);
+    const newTaxText = newRegime.tax_payable_inr || formatINR(newRegime.tax_payable || 0);
+    const oldTax = Number(oldRegime.tax_payable || 0);
+    const newTax = Number(newRegime.tax_payable || 0);
+    const savings = oldTax - newTax;
+    const verdict =
+      savings > 0
+        ? `New Regime saves you ${formatINR(savings)} this year`
+        : `Old Regime saves you ${formatINR(Math.abs(savings))} this year`;
+
+    taxResults.innerHTML = `
+      <h3>Tax Comparison</h3>
+      <p><strong>Old Regime:</strong> ${oldTaxText}</p>
+      <p><strong>New Regime:</strong> ${newTaxText}</p>
+      <p><strong>Verdict:</strong> ${verdict}</p>
+    `;
+    taxResults.classList.remove("hidden");
+    taxResults.scrollIntoView({ behavior: "smooth" });
+    return;
+  }
   
   oldSteps.innerHTML = `
     <div class="calculation-step"><strong>Step 1:</strong> Gross Income <span class="step-value">${formatINR(oldRegime.gross_income || 0)}</span></div>
@@ -381,8 +426,14 @@ function renderTaxResults(data) {
     <div class="calculation-step" style="border-bottom: 2px solid var(--accent); padding-top: 8px; margin-top: 8px;"><strong>TOTAL TAX</strong> <span class="step-value" style="font-size: 1.2rem;">${formatINR(newRegime.tax_payable || 0)}</span></div>
   `;
   
-  document.getElementById("old-tax-display").textContent = oldRegime.tax_payable_inr || formatINR(oldRegime.tax_payable || 0);
-  document.getElementById("new-tax-display").textContent = newRegime.tax_payable_inr || formatINR(newRegime.tax_payable || 0);
+  const oldTaxDisplay = document.getElementById("old-tax-display");
+  const newTaxDisplay = document.getElementById("new-tax-display");
+  if (oldTaxDisplay) {
+    oldTaxDisplay.textContent = oldRegime.tax_payable_inr || formatINR(oldRegime.tax_payable || 0);
+  }
+  if (newTaxDisplay) {
+    newTaxDisplay.textContent = newRegime.tax_payable_inr || formatINR(newRegime.tax_payable || 0);
+  }
   
   const oldTax = Number(oldRegime.tax_payable || 0);
   const newTax = Number(newRegime.tax_payable || 0);
@@ -482,7 +533,7 @@ function updateSliderLabels() {
 
 async function loadAuditTrail() {
   try {
-    const response = await fetch("/api/audit-log");
+    const response = await apiFetch("/api/audit-log");
     const data = await response.json();
     if (!response.ok) {
       throw new Error(data.error || "Could not fetch audit logs.");
@@ -518,7 +569,7 @@ async function loadAuditTrail() {
   }
 }
 
-if (form) form.addEventListener("submit", async (event) => {
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const formData = new FormData(form);
@@ -547,7 +598,7 @@ if (form) form.addEventListener("submit", async (event) => {
   const timer = startLoadingAnimation();
 
   try {
-    const response = await fetch("/api/analyze", {
+    const response = await apiFetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -581,7 +632,7 @@ recalculateBtn.addEventListener("click", async () => {
       expected_returns: Number(document.getElementById("slider-returns").value),
       target_monthly_corpus_draw: Number(document.getElementById("slider-draw").value),
     };
-    const response = await fetch("/api/recalculate", {
+    const response = await apiFetch("/api/recalculate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -605,7 +656,7 @@ recalculateBtn.addEventListener("click", async () => {
   }
 });
 
-if (taxForm) taxForm.addEventListener("submit", async (event) => {
+taxForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(taxForm);
   const payload = {
@@ -619,7 +670,7 @@ if (taxForm) taxForm.addEventListener("submit", async (event) => {
   };
 
   try {
-    const response = await fetch("/api/tax-wizard", {
+    const response = await apiFetch("/api/tax-wizard", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -636,7 +687,7 @@ if (taxForm) taxForm.addEventListener("submit", async (event) => {
   }
 });
 
-if (portfolioForm) portfolioForm.addEventListener("submit", async (event) => {
+portfolioForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const payload = {
@@ -651,7 +702,7 @@ if (portfolioForm) portfolioForm.addEventListener("submit", async (event) => {
   }
 
   try {
-    const response = await fetch("/api/portfolio-xray", {
+    const response = await apiFetch("/api/portfolio-xray", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -701,9 +752,9 @@ if (portfolioForm) portfolioForm.addEventListener("submit", async (event) => {
   }
 });
 
-if (refreshAuditBtn) refreshAuditBtn.addEventListener("click", loadAuditTrail);
-if (addGoalBtn) addGoalBtn.addEventListener("click", () => addGoalRow());
-if (addFundBtn) addFundBtn.addEventListener("click", () => addFundRow());
+refreshAuditBtn.addEventListener("click", loadAuditTrail);
+addGoalBtn.addEventListener("click", () => addGoalRow());
+addFundBtn.addEventListener("click", () => addFundRow());
 
 ["slider-retirement-age", "slider-returns", "slider-draw"].forEach((id) => {
   const el = document.getElementById(id);
@@ -723,30 +774,26 @@ document.addEventListener("click", (e) => {
   }
 });
 
-if (goalsList) {
-  addGoalRow({ name: "Emergency Fund Top-up", target_amount: 270000, years: 1 });
-  addGoalRow({ name: "Retirement", target_amount: 30000000, years: 32 });
-}
+addGoalRow({ name: "Emergency Fund Top-up", target_amount: 270000, years: 1 });
+addGoalRow({ name: "Retirement", target_amount: 30000000, years: 32 });
 
-if (fundsList) {
-  addFundRow({
-    name: "Large Cap Fund",
-    purchase_amount: 200000,
-    current_value: 248000,
-    purchase_date: "2023-06-15",
-    holding_1: "Reliance 9",
-    holding_2: "HDFC Bank 8",
-    holding_3: "ICICI Bank 6",
-  });
-  addFundRow({
-    name: "Flexi Cap Fund",
-    purchase_amount: 180000,
-    current_value: 220000,
-    purchase_date: "2024-01-18",
-    holding_1: "Reliance 7",
-    holding_2: "Infosys 6",
-    holding_3: "HDFC Bank 5",
-  });
-}
+addFundRow({
+  name: "Large Cap Fund",
+  purchase_amount: 200000,
+  current_value: 248000,
+  purchase_date: "2023-06-15",
+  holding_1: "Reliance 9",
+  holding_2: "HDFC Bank 8",
+  holding_3: "ICICI Bank 6",
+});
+addFundRow({
+  name: "Flexi Cap Fund",
+  purchase_amount: 180000,
+  current_value: 220000,
+  purchase_date: "2024-01-18",
+  holding_1: "Reliance 7",
+  holding_2: "Infosys 6",
+  holding_3: "HDFC Bank 5",
+});
 
-if (updateSliderLabels) updateSliderLabels();
+updateSliderLabels();
