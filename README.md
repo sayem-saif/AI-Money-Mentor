@@ -82,13 +82,9 @@ ai-money-mentor/
 - `GET /health` -> `{ "status": "ok" }`
 - `POST /api/analyze` -> full structured finance advisory report
 
-## Screenshots
-
-- Dashboard screenshot: _placeholder_
-- Input form screenshot: _placeholder_
 
 ## Team
 
-- Team name: _placeholder_
-- Members: _placeholder_
+- Team name: Money Mentor
+- MD Sayem Saif
 
