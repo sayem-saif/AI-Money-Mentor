@@ -293,16 +293,27 @@ function renderResults(data) {
 }
 
 function loadDemoData() {
-  document.querySelector("input[name='name']").value = "Arjun Sharma";
-  document.querySelector("input[name='age']").value = "34";
-  document.querySelector("input[name='monthly_income']").value = "200000";
-  document.querySelector("input[name='monthly_expenses']").value = "80000";
-  document.querySelector("input[name='existing_savings']").value = "50000";
-  document.querySelector("input[name='existing_investments']").value = "1800000";
-  document.querySelector("input[name='emergency_fund']").value = "30000";
-  document.querySelector("select[name='risk_appetite']").value = "moderate";
-  document.querySelector("input[name='has_term_insurance']").value = "false";
-  document.querySelector("input[name='has_health_insurance']").value = "true";
+  const nameEl = document.querySelector("input[name='name']");
+  const ageEl = document.querySelector("input[name='age']");
+  const incomeEl = document.querySelector("input[name='monthly_income']");
+  const expenseEl = document.querySelector("input[name='monthly_expenses']");
+  const savingsEl = document.querySelector("input[name='existing_savings']");
+  const investEl = document.querySelector("input[name='existing_investments']");
+  const emergencyEl = document.querySelector("input[name='emergency_fund']");
+  const riskEl = document.querySelector("select[name='risk_appetite']");
+  const termEl = document.querySelector("input[name='has_term_insurance']");
+  const healthEl = document.querySelector("input[name='has_health_insurance']");
+  
+  if (nameEl) nameEl.value = "Arjun Sharma";
+  if (ageEl) ageEl.value = "34";
+  if (incomeEl) incomeEl.value = "200000";
+  if (expenseEl) expenseEl.value = "80000";
+  if (savingsEl) savingsEl.value = "50000";
+  if (investEl) investEl.value = "1800000";
+  if (emergencyEl) emergencyEl.value = "30000";
+  if (riskEl) riskEl.value = "moderate";
+  if (termEl) termEl.value = "false";
+  if (healthEl) healthEl.value = "true";
   
   goalsList.innerHTML = "";
   addGoalRow({ name: "Emergency Fund Top-up", target_amount: 270000, years: 1 });
@@ -312,12 +323,22 @@ function loadDemoData() {
 }
 
 function loadDemoDataTax() {
-  document.querySelector("input[name='annual_income']").value = "1800000";
-  document.querySelector("input[name='deductions_80c']").value = "150000";
-  document.querySelector("input[name='hra_exemption']").value = "360000";
-  document.querySelector("input[name='home_loan_interest']").value = "40000";
-  document.querySelector("input[name='nps_contribution']").value = "50000";
-  document.querySelector("select[name='city_type']").value = "metro";
+  const annualEl = document.querySelector("input[name='annual_income']");
+  const deductEl = document.querySelector("input[name='deductions_80c']");
+  const hraEl = document.querySelector("input[name='hra_exemption']");
+  const loanEl = document.querySelector("input[name='home_loan_interest']");
+  const npsEl = document.querySelector("input[name='nps_contribution']");
+  const cityEl = document.querySelector("select[name='city_type']");
+  const rentEl = document.querySelector("input[name='monthly_rent']");
+  
+  if (annualEl) annualEl.value = "1800000";
+  if (deductEl) deductEl.value = "150000";
+  if (hraEl) hraEl.value = "360000";
+  if (loanEl) loanEl.value = "40000";
+  if (npsEl) npsEl.value = "50000";
+  if (cityEl) cityEl.value = "metro";
+  if (rentEl) rentEl.value = "30000";
+}
   document.querySelector("input[name='monthly_rent']").value = "30000";
 }
 
