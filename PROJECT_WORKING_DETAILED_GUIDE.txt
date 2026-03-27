@@ -898,4 +898,284 @@ Expected 3-minute demo flow:
 Total flow: ~25-35 seconds of actual user actions + 10 seconds waiting for APIs
 
 
+====================================================================
+22) COMPLETE FUNCTION REFERENCE — ALL ENABLED FUNCTIONS
+====================================================================
+
+FRONTEND (static/script.js) - All Available Functions
+=====================================================
+
+Core Utilities:
+  formatINR(value) → string
+    Formats number as Indian currency (₹XX,XX,XXX format)
+
+  escapeHtml(value) → string
+    XSS-safe HTML escaping for rendering user data
+
+  switchTab(tabId) → void
+    Activates specific tab and hides others (tab-1 to tab-4)
+
+Tab & Control Handlers:
+  loadDemoData() → void [NEW - FIX 5]
+    Auto-populates Dashboard form with Arjun Sharma demo scenario
+    Clears existing goals and adds 4 demo goals
+    Makes demo ready for immediate "Analyze" submission
+
+  loadDemoDataTax() → void [NEW - FIX 5]
+    Auto-populates Tax Wizard form with demo tax scenario
+    Sets all 7 fields including new NPS/City/Rent fields
+
+Form Input Handlers:
+  addGoalRow(goal = {}) → void
+    Dynamically creates financial goal input row
+    Supports name, target_amount, years, and remove button
+
+  addFundRow(fund = {}) → void
+    Dynamically creates portfolio fund input row
+    Supports name, amounts, dates, holdings 1-3
+
+  collectGoals() → array
+    Serializes goal input rows into JSON array for API
+
+  collectFunds() → array
+    Serializes fund input rows into JSON array for API
+
+  updateSliderLabels() → void
+    Updates visible slider values for retirement age, returns, corpus draw
+
+Animation & Display:
+  renderLoadingSteps(index) → void
+    Updates loading progress indicator (pending/done stages)
+
+  startLoadingAnimation() → interval_id
+    Starts rotating loading messages until clearInterval called
+
+  renderGauge(score) → void [UPDATED - FIX 7]
+    Renders Chart.js semi-circle donut gauge (Canvas-based)
+    Color: Red (0-40), Orange (40-70), Teal (70-100)
+    Counts up 0→score over 1.5 seconds
+
+  renderScoreBreakdown(breakdown) → void
+    Renders category scores as text labels (legacy method)
+
+  renderScoreBars(breakdown) → void [NEW - FIX 7]
+    Renders 6 animated horizontal progress bars from breakdown object
+    Animates width fill 0%→target% over 1.5 seconds
+    Shows: emergency, insurance, invest, debt, tax, retirement
+
+Tax Results Handler:
+  renderTaxResults(data) → void [NEW - FIX 2]
+    Transforms /api/tax-wizard response into visual UI
+    Renders old/new regime accordions with 9 calculation steps
+    Shows verdict banner (green/blue) with savings amount
+    Displays missed deductions (orange warning cards)
+    Shows 3 recommended instruments grid (ELSS/PPF/NPS)
+
+Dashboard Results:
+  renderResults(data) → void [UPDATED - FIX 7]
+    Main full-dashboard rendering function called after /api/analyze
+    Now also calls renderScoreBars() for animated progress bars
+    Shows FIRE summary, goals SIP table, gaps, roadmap, summary
+
+Audit Trail:
+  loadAuditTrail() → promise void
+    Fetches /api/audit-log and renders audit entries or empty message
+    Shows timestamp, endpoint, status, and result keys for each log entry
+
+Form Submission Handlers (event listeners):
+  mentor-form.addEventListener('submit') → async
+    Calls /api/analyze with collected profile data
+    Shows loading animation, then renderResults on success
+
+  tax-form.addEventListener('submit') → async [UPDATED - FIX 1]
+    Calls /api/tax-wizard with annual_income, deductions_80c, hra_exemption,
+    home_loan_interest, nps_contribution [NEW], city_type [NEW], monthly_rent [NEW]
+    Calls renderTaxResults on success
+
+  portfolio-form.addEventListener('submit') → async
+    Calls /api/portfolio-xray with funds and expense settings
+
+  recalculate-btn.addEventListener('click') → async
+    Calls /api/recalculate with profile + slider adjustments
+    Updates gauge and score bars on success
+
+  refresh-audit-btn.addEventListener('click') → void
+    Calls loadAuditTrail() to refresh audit log
+
+  accordion-btn.addEventListener('click') → void [NEW - FIX 2]
+    Toggles expanded/collapsed state on tax accordion buttons
+    Allows users to show/hide 9-step calculation details
+
+  load-demo-data.addEventListener('click') → void [NEW - FIX 5]
+    Calls loadDemoData() when demo button clicked
+
+  load-tax-demo-data.addEventListener('click') → void [NEW - FIX 5]
+    Calls loadDemoDataTax() when tax demo button clicked
+
+BACKEND (tools/finance_tools.py) - Enhanced Functions
+=====================================================
+
+Input Validation:
+  validate_and_structure_profile(user_data) → dict
+    Cleans, validates, and assigns defaults to user financial profile
+    Computes monthly_surplus and validates age/income constraints
+
+FIRE Calculation:
+  calculate_fire_metrics(profile) → dict
+    Computes FIRE number, years to target, monthly SIP by goal
+    Includes emergency fund target and 12-month milestones
+
+Financial Analysis:
+  analyze_financial_gaps(profile, fire_data) → list
+    Identifies major gaps: insurance, emergency fund, tax, retirement
+    Severity levels: high, medium, low
+
+Reporting:
+  build_final_report(profile, fire_data, gaps) → dict
+    Synthesizes final comprehensive financial report
+    Includes summary, motivation, priority actions, roadmap
+
+Tax Analysis:
+  compare_tax_regimes(inputs) → dict [EXPANDED - FIX 1]
+    Now accepts inputs dict with:
+      - annual_income
+      - deductions_80c
+      - hra_exemption
+      - home_loan_interest
+      - nps_contribution [NEW] (₹0-50,000)
+      - city_type [NEW] (metro/non-metro)
+      - monthly_rent [NEW] (for HRA calculation)
+    
+    Returns:
+      old_regime: {
+        gross_income, hra_exemption, deductions_80c, nps_contribution,
+        home_loan_interest, taxable_income, tax_before_cess, education_cess,
+        tax_payable, tax_payable_inr
+      }
+      new_regime: {
+        gross_income, nps_contribution, taxable_income, tax_before_cess,
+        education_cess, tax_payable, tax_payable_inr
+      }
+      recommended_regime, tax_saved, tax_saved_inr, tax_plan
+      claimed_80d, claimed_80g (flags for missed deductions)
+      section_80c_suggestions, instruments list
+
+Portfolio Analysis:
+  portfolio_xray(inputs) → dict
+    Analyzes portfolio for overlap, expense ratio impact, rebalancing
+    Returns XIRR, overlap matrix, cost impact 10-year projection, recommendations
+
+Recalculation:
+  recalculate_fire_projection(profile, retirement_age, expected_returns, target_monthly_corpus_draw) → dict
+    Fast what-if FIRE recomputation based on slider adjustments
+
+  compute_health_score_quick(profile, fire_projection) → dict
+    Recomputes health score without full pipeline rerun
+
+
+FRONTEND (templates/index.html) - New HTML Elements
+==================================================
+
+Header:
+  <p class="powered-by"> [NEW - FIX 3]
+    Displays tech stack badge: "Powered by Google ADK · Gemini 2.0 Flash..."
+
+Dashboard Tab:
+  <button id="load-demo-data" class="demo-btn"> [NEW - FIX 5]
+    "Load Demo Data" button to auto-fill form
+
+Tax Wizard Tab:
+  <input name="nps_contribution"> [NEW - FIX 1]
+  <select name="city_type"> [NEW - FIX 1]
+  <input name="monthly_rent"> [NEW - FIX 1]
+    Three new form fields for enhanced tax calculation
+
+  <button id="load-tax-demo-data" class="demo-btn"> [NEW - FIX 5]
+    "Load Demo Data" button to auto-fill tax form
+
+  <section id="tax-results"> [UPDATED - FIX 2]
+    Now contains tax-results-container with:
+    - tax-cards grid (old/new regime side-by-side)
+    - verdict-banner (green/blue) between them
+    - accordion elements showing 9 calculation steps each
+    - missed-deductions-section (orange warning cards)
+    - instruments-section (3 recommended cards)
+
+Health Score Card:
+  <canvas id="healthScoreGauge"> [UPDATED - FIX 7]
+    Replaced SVG gauge with Chart.js canvas donut chart
+
+  <div id="score-bars"> [NEW - FIX 7]
+    Container for 6 animated progress bars
+
+Audit Trail Tab:
+  <p id="audit-empty-msg"> [UPDATED - FIX 6]
+    Changed to actionable instruction message
+
+
+FRONTEND (static/style.css) - New CSS Classes
+============================================
+
+Layout & Display:
+  .powered-by - Semi-transparent teal badge styling
+  .demo-btn - Teal-tinted button styling with hover effect
+  .form-header - Flexbox for heading + demo button alignment
+
+Tax Results:
+  .tax-results-container - Flex column wrapper
+  .tax-cards - 2-column grid for old/new regime cards
+  .tax-card - Individual regime card styling
+  .accordion - Accordion wrapper container
+  .accordion-btn - Expandable button styling (inactive/active states)
+  .accordion-content - Hidden/shown step-by-step content
+  .calculation-step - Individual calculation row with step-value float-right
+  .tax-summary - Centered bottom summary with border-top
+  .tax-amount - Large bold tax display (1.4rem, accent color)
+  .verdict-banner - 2-column spanning banner (green/blue gradient)
+  .missed-deduction-card - Orange bordered warning card
+  .missed-deductions-section - Grid container for warnings
+  .instruments-label - Light section label
+  .instruments-grid - 3-column grid for instrument cards
+  .instrument-card - Individual instrument showing risk/lock-in/liquidity
+
+Score Display:
+  #healthScoreGauge - Canvas element styling
+  #health-score-label - Centered label below gauge
+  .score-bars - Margin container for bar rows
+  .score-bar-row - Flex row layout
+  .score-bar-label - Min-width label (200px)
+  .score-bar-track - Flex-grow track background
+  .score-bar-fill - Animated fill width (1.5s ease)
+  .score-bar-value - Right-aligned current/max display
+
+Responsive:
+  @media (max-width: 1024px):
+    .tax-cards collapses to 1 column
+    .instruments-grid collapses to 1 column
+    .verdict-banner respects new grid layout
+
+Text Utilities:
+  small - Block-level muted text (0.82rem, margin-top 4px)
+
+
+====================================================================
+23) NEW SECTION ADDED TO DOCUMENTATION
+====================================================================
+
+Sections 17-22 provide comprehensive coverage of:
+  - Section 17: All 7 final fixes with implementation details
+  - Section 18: New JavaScript functions
+  - Section 19: Updated backend functions
+  - Section 20: New event listeners
+  - Section 21: Expected 3-minute demo flow
+  - Section 22: Complete function reference (this section)
+
+This guide now serves as complete technical documentation for:
+  ✅ Every function available in the system
+  ✅ Every new HTML/CSS element added for FIX 1-7
+  ✅ Backend API contract for all 7 fields in tax wizard
+  ✅ Demo flow for judges/evaluators
+  ✅ Architecture and multi-agent system design
+
+
 END OF DOCUMENT
