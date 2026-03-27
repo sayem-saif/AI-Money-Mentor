@@ -72,23 +72,6 @@ ai-money-mentor/
    ```
 5. Open `http://localhost:5000`.
 
-## Deployment
-
-Recommended platforms: Render or Railway.
-
-- Build command: `pip install -r requirements.txt`
-- Start command: `gunicorn main:app`
-
-Set these environment variables in your deployment dashboard:
-
-- `OPENROUTER_BASE_URL=https://openrouter.ai/api/v1`
-- `OPENROUTER_API_KEY=your_sk-or-v1_key`
-- `OPENROUTER_MODEL=openai/gpt-oss-20b`
-- `OPENROUTER_SITE_URL=https://your-deployed-domain`
-- `OPENROUTER_APP_NAME=AI Money Mentor`
-- `USE_MODEL_AGENT=true`
-- `ALLOW_DETERMINISTIC_FALLBACK=false`
-
 ## Agents
 
 - **Orchestrator Agent**: Controls the end-to-end sequence and combines outputs.
