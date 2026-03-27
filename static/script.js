@@ -518,7 +518,7 @@ async function loadAuditTrail() {
   }
 }
 
-form.addEventListener("submit", async (event) => {
+if (form) form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const formData = new FormData(form);
@@ -605,7 +605,7 @@ recalculateBtn.addEventListener("click", async () => {
   }
 });
 
-taxForm.addEventListener("submit", async (event) => {
+if (taxForm) taxForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(taxForm);
   const payload = {
@@ -636,7 +636,7 @@ taxForm.addEventListener("submit", async (event) => {
   }
 });
 
-portfolioForm.addEventListener("submit", async (event) => {
+if (portfolioForm) portfolioForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const payload = {
@@ -701,9 +701,9 @@ portfolioForm.addEventListener("submit", async (event) => {
   }
 });
 
-refreshAuditBtn.addEventListener("click", loadAuditTrail);
-addGoalBtn.addEventListener("click", () => addGoalRow());
-addFundBtn.addEventListener("click", () => addFundRow());
+if (refreshAuditBtn) refreshAuditBtn.addEventListener("click", loadAuditTrail);
+if (addGoalBtn) addGoalBtn.addEventListener("click", () => addGoalRow());
+if (addFundBtn) addFundBtn.addEventListener("click", () => addFundRow());
 
 ["slider-retirement-age", "slider-returns", "slider-draw"].forEach((id) => {
   const el = document.getElementById(id);
@@ -723,26 +723,30 @@ document.addEventListener("click", (e) => {
   }
 });
 
-addGoalRow({ name: "Emergency Fund Top-up", target_amount: 270000, years: 1 });
-addGoalRow({ name: "Retirement", target_amount: 30000000, years: 32 });
+if (goalsList) {
+  addGoalRow({ name: "Emergency Fund Top-up", target_amount: 270000, years: 1 });
+  addGoalRow({ name: "Retirement", target_amount: 30000000, years: 32 });
+}
 
-addFundRow({
-  name: "Large Cap Fund",
-  purchase_amount: 200000,
-  current_value: 248000,
-  purchase_date: "2023-06-15",
-  holding_1: "Reliance 9",
-  holding_2: "HDFC Bank 8",
-  holding_3: "ICICI Bank 6",
-});
-addFundRow({
-  name: "Flexi Cap Fund",
-  purchase_amount: 180000,
-  current_value: 220000,
-  purchase_date: "2024-01-18",
-  holding_1: "Reliance 7",
-  holding_2: "Infosys 6",
-  holding_3: "HDFC Bank 5",
-});
+if (fundsList) {
+  addFundRow({
+    name: "Large Cap Fund",
+    purchase_amount: 200000,
+    current_value: 248000,
+    purchase_date: "2023-06-15",
+    holding_1: "Reliance 9",
+    holding_2: "HDFC Bank 8",
+    holding_3: "ICICI Bank 6",
+  });
+  addFundRow({
+    name: "Flexi Cap Fund",
+    purchase_amount: 180000,
+    current_value: 220000,
+    purchase_date: "2024-01-18",
+    holding_1: "Reliance 7",
+    holding_2: "Infosys 6",
+    holding_3: "HDFC Bank 5",
+  });
+}
 
-updateSliderLabels();
+if (updateSliderLabels) updateSliderLabels();
