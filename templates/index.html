@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Money Mentor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Sora:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+
+    <main class="container">
+      <header class="hero">
+        <p class="eyebrow">ET AI Hackathon 2026 · PS 9</p>
+        <h1>AI Money Mentor</h1>
+        <p class="subhead">
+          Multi-agent personal finance advisor for Indian users. Build your SIP strategy,
+          track FIRE readiness, and close critical money gaps.
+        </p>
+      </header>
+
+      <section class="card form-card">
+        <h2>Step 1 · Share Your Financial Snapshot</h2>
+        <form id="mentor-form">
+          <div class="grid two">
+            <label>
+              Full Name
+              <input type="text" name="name" placeholder="Arjun Sharma" required />
+            </label>
+            <label>
+              Age
+              <input type="number" name="age" min="18" max="75" required />
+            </label>
+          </div>
+
+          <div class="grid two">
+            <label>
+              Monthly Income (₹)
+              <input type="number" name="monthly_income" min="0" required />
+            </label>
+            <label>
+              Monthly Expenses (₹)
+              <input type="number" name="monthly_expenses" min="0" required />
+            </label>
+          </div>
+
+          <div class="grid three">
+            <label>
+              Existing Savings (₹)
+              <input type="number" name="existing_savings" min="0" value="0" />
+            </label>
+            <label>
+              Existing Investments (₹)
+              <input type="number" name="existing_investments" min="0" value="0" />
+            </label>
+            <label>
+              Emergency Fund (₹)
+              <input type="number" name="emergency_fund" min="0" value="0" />
+            </label>
+          </div>
+
+          <div class="grid three">
+            <label>
+              Risk Appetite
+              <select name="risk_appetite" required>
+                <option value="conservative">Conservative</option>
+                <option value="moderate" selected>Moderate</option>
+                <option value="aggressive">Aggressive</option>
+              </select>
+            </label>
+            <label>
+              Term Life Insurance
+              <select name="has_term_insurance" required>
+                <option value="true">Yes</option>
+                <option value="false" selected>No</option>
+              </select>
+            </label>
+            <label>
+              Health Insurance
+              <select name="has_health_insurance" required>
+                <option value="true" selected>Yes</option>
+                <option value="false">No</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="goals-block">
+            <div class="goals-header">
+              <h3>Financial Goals</h3>
+              <button type="button" id="add-goal" class="ghost-btn">+ Add Goal</button>
+            </div>
+            <div id="goals-list"></div>
+          </div>
+
+          <button type="submit" class="primary-btn">Analyze My Finances -></button>
+        </form>
+      </section>
+
+      <section id="loading" class="card loading-card hidden">
+        <div class="spinner"></div>
+        <p id="loading-text">Profiling your finances...</p>
+      </section>
+
+      <section id="results" class="hidden">
+        <div class="grid two">
+          <article class="card score-card">
+            <h2>Money Health Score</h2>
+            <div class="gauge-wrap">
+              <svg viewBox="0 0 120 120" class="gauge" aria-hidden="true">
+                <circle cx="60" cy="60" r="52" class="gauge-track"></circle>
+                <circle cx="60" cy="60" r="52" class="gauge-value" id="gauge-value"></circle>
+              </svg>
+              <p id="health-score-value">0</p>
+            </div>
+            <div id="score-breakdown"></div>
+          </article>
+
+          <article class="card fire-card">
+            <h2>FIRE Summary</h2>
+            <div id="fire-summary"></div>
+          </article>
+        </div>
+
+        <article class="card">
+          <h2>Goal-Wise SIP Plan</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Goal</th>
+                  <th>Target</th>
+                  <th>Years</th>
+                  <th>Monthly SIP</th>
+                </tr>
+              </thead>
+              <tbody id="goals-table-body"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>Gap Analysis</h2>
+          <div id="gap-cards" class="grid three"></div>
+        </article>
+
+        <article class="card">
+          <h2>Top 5 Priority Actions</h2>
+          <ol id="priority-actions"></ol>
+        </article>
+
+        <article class="card">
+          <h2>12-Month Roadmap</h2>
+          <div id="roadmap" class="roadmap"></div>
+        </article>
+
+        <article class="card summary-card">
+          <h2>Your Snapshot</h2>
+          <p id="summary-text"></p>
+          <p id="motivation-text" class="motivation"></p>
+          <button onclick="window.print()" class="ghost-btn">Download Report</button>
+        </article>
+      </section>
+    </main>
+
+    <script src="/static/script.js"></script>
+  </body>
+</html>
