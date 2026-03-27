@@ -1,0 +1,615 @@
+AI MONEY MENTOR - DETAILED PROJECT WORKING GUIDE
+Version date: 2026-03-27
+
+====================================================================
+1) WHAT THIS PROJECT IS
+====================================================================
+AI Money Mentor is a multi-agent personal finance web application.
+It accepts user financial data, runs planning logic, and returns:
+- Money Health Score
+- FIRE projection
+- Goal-wise SIP requirements
+- Risk and protection gaps
+- Actionable roadmap
+- Tax regime comparison (old vs new)
+- Portfolio x-ray (overlap, cost impact, rebalancing)
+- Audit trail records
+
+The app has:
+- Backend server (Flask, Python)
+- Frontend dashboard (HTML/CSS/JS)
+- Agent layer (Google ADK agent objects)
+- Deterministic financial tool layer (pure Python functions)
+- Model integration layer (OpenRouter for LLM mode)
+
+
+====================================================================
+2) HIGH-LEVEL ARCHITECTURE
+====================================================================
+
+Browser UI
+  |
+  | (fetch HTTP requests)
+  v
+Flask API Server (main.py)
+  |
+  |-- /api/analyze ---------> Orchestration Layer (agents/orchestrator.py)
+  |                             |-- LLM route (OpenRouter)
+  |                             |-- Schema guard + deterministic repair/fallback
+  |                             |-- Deterministic chain:
+  |                                  profile -> fire -> gaps -> report
+  |
+  |-- /api/tax-wizard ------> Tax Wizard Agent wrapper -> compare_tax_regimes()
+  |
+  |-- /api/portfolio-xray --> Portfolio X-Ray Agent wrapper -> portfolio_xray()
+  |
+  |-- /api/recalculate -----> validate profile + fast fire recalculation
+  |
+  |-- /api/audit-log -------> read audit_trail.jsonl
+  |
+  +-- audit append for each endpoint call (success/error)
+
+
+====================================================================
+3) CODE STRUCTURE AND WHY IT IS ORGANIZED THIS WAY
+====================================================================
+
+Root files and folders:
+- main.py
+  Why: single entrypoint for Flask server, route definitions, validation and error handling.
+
+- agents/
+  Why: separates each business capability into dedicated agent modules so orchestration is clean.
+
+- tools/finance_tools.py
+  Why: pure deterministic finance math/business logic in one place.
+
+- templates/index.html
+  Why: server-rendered single page shell for frontend.
+
+- static/script.js
+  Why: browser logic for form handling, API calls, rendering results.
+
+- static/style.css
+  Why: complete visual styling and responsive behavior.
+
+- .env / .env.example
+  Why: environment variables for keys and runtime flags.
+
+- requirements.txt
+  Why: dependency lock for reproducible setup.
+
+- audit_trail.jsonl
+  Why: append-only operational log for traceability.
+
+
+====================================================================
+4) SERVER STARTUP - STEP BY STEP (VERY SMALL TO BIG)
+====================================================================
+
+1. Python executes main.py.
+2. dotenv loads values from .env with override enabled.
+3. Flask app object is created.
+4. CORS is enabled to avoid browser cross-origin issues.
+5. AUDIT_LOG_FILE path is initialized to audit_trail.jsonl.
+6. Helper functions are defined:
+   - audit write/read
+   - schema validation checks
+   - schema repair function
+7. Routes are registered:
+   - /
+   - /health
+   - /api/analyze
+   - /api/tax-wizard
+   - /api/portfolio-xray
+   - /api/audit-log
+   - /api/recalculate
+8. If main module is executed directly:
+   - warns if OPENROUTER_API_KEY missing
+   - starts Flask dev server on 0.0.0.0:5000
+
+
+====================================================================
+5) FRONTEND FLOW - STEP BY STEP
+====================================================================
+
+The interface is 4-tab:
+- Dashboard
+- Tax Wizard
+- Portfolio X-Ray
+- Audit Trail
+
+Frontend runtime sequence:
+1. Browser opens / and receives templates/index.html.
+2. style.css applies theme, layout, tabs, responsive rules.
+3. script.js runs:
+   - binds form elements
+   - sets click listeners for tabs and buttons
+   - injects default goal rows and sample fund rows
+   - initializes slider labels
+4. User submits dashboard form:
+   - script collects fields into JSON payload
+   - POST /api/analyze
+   - shows loading animation and progress steps
+   - on response renders score, fire, table, gaps, roadmap, summary
+5. User can click Recalculate:
+   - POST /api/recalculate with profile + slider assumptions
+   - updates score and fire summary quickly
+6. User submits Tax Wizard form:
+   - POST /api/tax-wizard
+   - renders old/new tax, recommendation, savings, plan
+7. User submits Portfolio X-Ray form:
+   - POST /api/portfolio-xray
+   - renders xirr, overlap matrix, cost impact, recommendations
+8. User opens Audit tab or presses refresh:
+   - GET /api/audit-log
+   - renders latest endpoint call records
+
+
+====================================================================
+6) API DISTRIBUTION DIAGRAMS
+====================================================================
+
+A) /api/analyze distribution diagram
+
+Client form payload
+  -> main.py:/api/analyze
+      -> required field validation
+      -> if USE_MODEL_AGENT=true
+           -> run_orchestration_with_model(user_data)
+              -> _run_openrouter_model()
+                 -> OpenRouter /chat/completions
+                 -> parse JSON text
+           -> _is_model_response_usable(report)?
+                -> yes: return model report
+                -> no: _repair_with_deterministic_schema()
+                     -> run_orchestration(user_data)
+                     -> preserve summary/motivation/actions from model if safe
+      -> else (USE_MODEL_AGENT=false)
+           -> run_orchestration(user_data)
+      -> append audit log success
+      -> return JSON report
+   on error:
+      -> append audit log error
+      -> return 500 + details
+
+B) /api/tax-wizard
+
+Client tax payload
+  -> main.py:/api/tax-wizard
+      -> run_tax_wizard(payload)
+         -> compare_tax_regimes(inputs)
+      -> append audit
+      -> return tax comparison JSON
+
+C) /api/portfolio-xray
+
+Client funds payload
+  -> main.py:/api/portfolio-xray
+      -> run_portfolio_xray(payload)
+         -> portfolio_xray(inputs)
+      -> append audit
+      -> return xray JSON
+
+D) /api/recalculate
+
+Client profile + sliders
+  -> main.py:/api/recalculate
+      -> validate_and_structure_profile(profile)
+      -> recalculate_fire_projection(...)
+      -> compute_health_score_quick(...)
+      -> append audit
+      -> return compact score/fire JSON
+
+E) /api/audit-log
+
+Client request
+  -> main.py:/api/audit-log
+      -> _read_audit_logs(limit)
+      -> return most recent logs
+
+
+====================================================================
+7) WHY MULTI-AGENT IS USED HERE
+====================================================================
+
+Why use agents:
+1. Separation of responsibilities
+   - profiling agent handles input quality
+   - fire agent handles corpus math
+   - risk agent handles gap diagnostics
+   - report agent handles synthesis and prioritization
+
+2. Better maintainability
+   - each module can be changed independently without breaking all logic.
+
+3. Better explainability
+   - outputs can be tied to specific stages instead of one monolithic function.
+
+4. Easier scaling
+   - future agents can be added (loan advisor, estate planner, compliance checker).
+
+5. Deterministic safety with optional LLM
+   - system can run deterministic chain even if model output is malformed.
+
+What happens if you do not use agents:
+- You can still implement everything in one large function.
+- But code becomes hard to debug, extend, test, and reason about.
+- You lose stage-level observability and clean pipeline boundaries.
+
+In this project, agents are practical architecture boundaries plus ADK integration points.
+
+
+====================================================================
+8) BACKEND MODULE WALKTHROUGH
+====================================================================
+
+8.1 main.py
+
+- _append_audit_log(endpoint, status, payload, response)
+  Purpose: persist operational record for every API call.
+  Why needed: accountability, debugging, traceability.
+
+- _read_audit_logs(limit)
+  Purpose: read audit_trail.jsonl safely.
+  Why needed: feed Audit tab UI and allow historical inspection.
+
+- _has_required_fields(item, required)
+  Purpose: low-level schema field presence check.
+  Why needed: model output can omit fields; frontend expects strict keys.
+
+- _is_model_response_usable(report)
+  Purpose: validates whether LLM output can be rendered safely.
+  Why needed: avoids UI breakage from missing keys/wrong shapes.
+
+- _repair_with_deterministic_schema(model_report, payload)
+  Purpose: generate guaranteed-safe report using deterministic chain,
+           while preserving some narrative from model output.
+  Why needed: best of both worlds - reliable schema plus model tone.
+
+- route /
+  Purpose: serve frontend page.
+
+- route /health
+  Purpose: health probe endpoint.
+
+- route /api/analyze
+  Purpose: main full-financial-analysis endpoint.
+  Flow:
+  1) validate request
+  2) choose model mode or deterministic mode by env
+  3) run orchestration
+  4) schema check/repair if needed
+  5) write audit
+  6) return JSON
+
+- route /api/tax-wizard
+  Purpose: dedicated tax analysis API.
+
+- route /api/portfolio-xray
+  Purpose: dedicated portfolio diagnostic API.
+
+- route /api/audit-log
+  Purpose: expose recent log entries for UI.
+
+- route /api/recalculate
+  Purpose: fast what-if recomputation for FIRE and score based on sliders.
+
+
+8.2 agents/orchestrator.py
+
+- money_mentor_orchestrator (Agent object)
+  Purpose: ADK-defined orchestration metadata and instruction sequence.
+  Note: current production route primarily uses deterministic function chain
+        and OpenRouter helper for reliability.
+
+- MODEL_INSTRUCTION_PREFIX
+  Purpose: constrain model output format and key list.
+
+- run_orchestration(user_data)
+  Purpose: deterministic pipeline.
+  Stages:
+  1) profile_user
+  2) calculate_fire
+  3) analyze_gaps
+  4) generate_report
+  Why needed: stable core independent of model quality.
+
+- _parse_json_payload(text)
+  Purpose: robust JSON extraction from model response text.
+  Why needed: LLM may add wrappers/noise around JSON.
+
+- _extract_chat_completion_text(response_json)
+  Purpose: support varying response envelopes.
+
+- _get_openrouter_api_keys()
+  Purpose: load and validate one/many API keys.
+  Why needed: key rotation and guard against placeholder values.
+
+- _run_openrouter_model(user_data)
+  Purpose: send request to OpenRouter chat/completions.
+  Why needed: LLM-generated advisory output path.
+
+- run_orchestration_with_model(user_data)
+  Purpose: wrapper for model path with provider metadata.
+
+
+8.3 Agent wrappers (single responsibility)
+
+- profiling_agent.py
+  profile_user(user_data) -> validate_and_structure_profile()
+
+- fire_calculator_agent.py
+  calculate_fire(profile) -> calculate_fire_metrics()
+
+- risk_gap_agent.py
+  analyze_gaps(payload) -> analyze_financial_gaps(profile, fire_data)
+
+- report_agent.py
+  generate_report(payload) -> build_final_report(profile, fire_data, gaps)
+
+- tax_wizard_agent.py
+  run_tax_wizard(payload) -> compare_tax_regimes()
+
+- portfolio_xray_agent.py
+  run_portfolio_xray(payload) -> portfolio_xray()
+
+Each wrapper exists so agent tools expose concise callable interfaces and keep
+business logic centralized in tools/finance_tools.py.
+
+
+====================================================================
+9) FINANCE FUNCTION DETAILS (tools/finance_tools.py)
+====================================================================
+
+9.1 Core utility functions
+
+- format_inr(value)
+  Indian currency formatting helper for readability in API/UI.
+
+- safe_float(value, default)
+  Safe numeric parsing to prevent crashes on bad inputs.
+
+- clamp(value, min, max)
+  Input bounds control.
+
+- normalize_risk(risk)
+  Maps varied user inputs to canonical risk buckets.
+
+9.2 Investment/FIRE math helpers
+
+- _annual_rate_from_risk(risk)
+  Risk profile -> annual expected return assumption.
+
+- _sip_payment_for_target(target_amount, months, annual_return)
+  Computes monthly SIP needed for target corpus.
+
+- _estimate_months_to_target(...)
+  Generic months-to-target solver.
+
+- _estimate_fire_timeline_with_inflation(...)
+  Simulation loop including inflation growth on FIRE target.
+
+- _blended_return_by_age(age)
+  Age-based equity/debt split and blended return.
+
+9.3 Primary profile and FIRE functions
+
+- validate_and_structure_profile(user_data)
+  Cleans and defaults incoming payload:
+  - clamps age
+  - minimum income/expense constraints
+  - sanitizes goals
+  - computes monthly_surplus
+  Required because real user input can be incomplete or malformed.
+
+- calculate_fire_metrics(profile)
+  Computes:
+  - annual expense and FIRE number
+  - years to FIRE
+  - goal SIP list
+  - emergency target and gap
+  - 12-month corpus milestones
+
+9.4 Gap analysis and scoring
+
+- analyze_financial_gaps(profile, fire_data)
+  Detects major financial gaps:
+  - term insurance
+  - health insurance
+  - emergency fund
+  - spending health
+  - 80C tax gap
+  - retirement readiness
+
+- _score_breakdown(profile, fire_data, gaps)
+  Converts financial status into category-wise score.
+
+- build_final_report(profile, fire_data, gaps)
+  Produces final structured report JSON consumed by dashboard.
+
+9.5 Tax wizard functions
+
+- _old_regime_taxable_income(...)
+  Taxable income under old regime assumptions.
+
+- _new_regime_taxable_income(...)
+  Taxable income under new regime assumptions.
+
+- _tax_from_slabs(taxable_income, slabs)
+  Generic slab-wise tax computation helper.
+
+- _apply_tax_rebate(taxable_income, tax, regime)
+  Applies rebate thresholds for old/new logic.
+
+- compare_tax_regimes(inputs)
+  Full old-vs-new comparison output with plan and recommendation.
+
+9.6 Portfolio x-ray functions
+
+- _parse_purchase_date(value)
+  Safe purchase date parser with fallback.
+
+- _holding_period_months(start)
+  Computes holding period used in rebalancing guidance.
+
+- _xirr(cashflows, guess)
+  Newton method for XIRR estimate.
+
+- _extract_overlap_weights(text_items)
+  Parses text holdings like "Reliance 9" into weight map.
+
+- portfolio_xray(inputs)
+  Computes:
+  - portfolio XIRR
+  - pairwise overlap matrix
+  - regular vs direct expense impact
+  - 10-year cost impact estimate
+  - rebalancing suggestion list
+
+9.7 Recalculation functions
+
+- recalculate_fire_projection(profile, retirement_age, expected_returns, target_monthly_corpus_draw)
+  Fast what-if FIRE recomputation for slider-driven UX.
+
+- compute_health_score_quick(profile, fire_projection)
+  Quick score estimate after recalculation without full pipeline rerun.
+
+
+====================================================================
+10) FRONTEND FUNCTION DETAILS (static/script.js)
+====================================================================
+
+- formatINR(value): browser-side INR formatting.
+- escapeHtml(value): XSS-safe rendering helper.
+- switchTab(tabId): tab activation state handling.
+- addGoalRow(goal): dynamic financial goal row creation.
+- addFundRow(fund): dynamic fund input card creation.
+- renderLoadingSteps(index): loading stage visibility.
+- startLoadingAnimation(): rotating loading status messages.
+- renderGauge(score): circular score gauge update.
+- renderScoreBreakdown(breakdown): score bars.
+- renderResults(data): full dashboard result rendering.
+- collectGoals(): serialize goal inputs into JSON.
+- collectFunds(): serialize fund inputs into JSON.
+- updateSliderLabels(): live slider text update.
+- loadAuditTrail(): fetch and render audit entries.
+
+Event listeners:
+- dashboard submit -> POST /api/analyze
+- recalc button -> POST /api/recalculate
+- tax submit -> POST /api/tax-wizard
+- portfolio submit -> POST /api/portfolio-xray
+- audit refresh -> GET /api/audit-log
+
+
+====================================================================
+11) DETAILED END-TO-END SCENARIO (EXAMPLE)
+====================================================================
+
+Scenario: User submits dashboard profile
+
+Step 1: Frontend collects form fields and goals into payload.
+Step 2: POST /api/analyze sent to backend.
+Step 3: Backend validates mandatory fields.
+Step 4: If model mode enabled:
+        - OpenRouter called
+        - JSON parsed
+        - schema tested
+        - if invalid schema -> deterministic repair path
+Step 5: Otherwise deterministic chain directly runs.
+Step 6: Final response logged into audit_trail.jsonl.
+Step 7: JSON returned to frontend.
+Step 8: Frontend renders score, fire, sip table, gaps, actions, roadmap.
+Step 9: User optionally uses sliders -> /api/recalculate updates fire/score quickly.
+Step 10: User can inspect audit tab to see what endpoint executed and when.
+
+
+====================================================================
+12) WHY CERTAIN DESIGN CHOICES WERE NECESSARY
+====================================================================
+
+1. Schema validation guard in main.py
+   Needed because LLM output can be structurally inconsistent.
+
+2. Deterministic finance_tools.py
+   Needed for repeatability, correctness, and testability.
+
+3. Agent wrappers over tool functions
+   Needed to expose each capability through clean ADK tool interfaces.
+
+4. Audit trail file
+   Needed for debugging, demonstrations, and accountability.
+
+5. Recalculate endpoint
+   Needed for fast interactive what-if analysis without rerunning full workflow.
+
+6. Separate endpoints for tax and xray
+   Needed for modular tab-based UX and independent backend execution.
+
+
+====================================================================
+13) LIMITATIONS TO EXPLAIN IN PRESENTATION
+====================================================================
+
+- Tax logic is simplified and should be treated as educational.
+- Portfolio overlap parser expects holdings text in "name percent" format.
+- Model response quality depends on provider response and schema adherence.
+- This is advisory simulation, not registered investment advice.
+
+
+====================================================================
+14) HOW TO RUN AND VERIFY
+====================================================================
+
+1. Install dependencies from requirements.txt.
+2. Configure .env variables (OpenRouter key and model flags).
+3. Start server: python main.py
+4. Visit: http://localhost:5000
+5. Verify endpoints:
+   - GET /health
+   - POST /api/analyze
+   - POST /api/tax-wizard
+   - POST /api/portfolio-xray
+   - POST /api/recalculate
+   - GET /api/audit-log
+
+
+====================================================================
+15) TECH STACK
+====================================================================
+
+Backend:
+- Python 3.x
+- Flask
+- Flask-CORS
+- python-dotenv
+
+Agent layer:
+- Google ADK
+
+Model provider:
+- OpenRouter (chat/completions API)
+
+Frontend:
+- HTML5
+- CSS3
+- Vanilla JavaScript
+
+Data/logging:
+- JSON and JSONL flat-file logging (audit_trail.jsonl)
+
+
+====================================================================
+16) SHORT INTERVIEW-READY ANSWER: "HOW MULTI-AGENT WORKS HERE"
+====================================================================
+
+In this project, multi-agent means each financial stage is handled by a dedicated agent:
+profiling agent cleans input, fire agent computes targets, risk agent finds gaps,
+and report agent synthesizes output. The orchestrator runs them in sequence.
+This keeps logic modular and explainable. If model output is malformed, the system
+uses deterministic tools to repair or fallback so the API still returns valid,
+renderable JSON.
+
+
+END OF DOCUMENT

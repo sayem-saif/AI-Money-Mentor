@@ -1,4 +1,5 @@
 import math
+from datetime import date, datetime
 from typing import Any, Dict, List, Tuple
 
 EQUITY_RETURN_ANNUAL = 0.12
@@ -495,3 +496,349 @@ def build_final_report(
         "summary": summary,
         "motivational_message": "Aap disciplined SIP aur smart tax planning se next level wealth build kar sakte ho. Har mahine ek small step, long term me huge difference banata hai.",
     }
+
+
+def _old_regime_taxable_income(annual_income: float, deductions_80c: float, hra_exemption: float) -> float:
+    standard_deduction = 50000.0
+    taxable = annual_income - standard_deduction - min(150000.0, max(0.0, deductions_80c)) - max(0.0, hra_exemption)
+    return max(0.0, taxable)
+
+
+def _new_regime_taxable_income(annual_income: float) -> float:
+    standard_deduction = 75000.0
+    return max(0.0, annual_income - standard_deduction)
+
+
+def _tax_from_slabs(taxable_income: float, slabs: List[Tuple[float, float]]) -> float:
+    tax = 0.0
+    previous_limit = 0.0
+    for limit, rate in slabs:
+        if taxable_income <= previous_limit:
+            break
+        slab_income = min(taxable_income, limit) - previous_limit
+        if slab_income > 0:
+            tax += slab_income * rate
+        previous_limit = limit
+    if taxable_income > previous_limit:
+        tax += (taxable_income - previous_limit) * slabs[-1][1]
+    return tax
+
+
+def _apply_tax_rebate(taxable_income: float, tax: float, regime: str) -> float:
+    if regime == "new" and taxable_income <= 700000:
+        return 0.0
+    if regime == "old" and taxable_income <= 500000:
+        return 0.0
+    return tax
+
+
+def compare_tax_regimes(inputs: Dict[str, Any]) -> Dict[str, Any]:
+    annual_income = max(0.0, safe_float(inputs.get("annual_income"), 0.0))
+    deductions_80c = max(0.0, safe_float(inputs.get("deductions_80c"), 0.0))
+    hra_exemption = max(0.0, safe_float(inputs.get("hra_exemption"), 0.0))
+    home_loan_interest = max(0.0, safe_float(inputs.get("home_loan_interest"), 0.0))
+
+    old_taxable = max(0.0, _old_regime_taxable_income(annual_income, deductions_80c, hra_exemption) - min(home_loan_interest, 200000.0))
+    new_taxable = _new_regime_taxable_income(annual_income)
+
+    old_slabs = [(250000.0, 0.0), (500000.0, 0.05), (1000000.0, 0.2), (9999999999.0, 0.3)]
+    new_slabs = [
+        (300000.0, 0.0),
+        (600000.0, 0.05),
+        (900000.0, 0.1),
+        (1200000.0, 0.15),
+        (1500000.0, 0.2),
+        (9999999999.0, 0.3),
+    ]
+
+    old_tax = _apply_tax_rebate(old_taxable, _tax_from_slabs(old_taxable, old_slabs), "old")
+    new_tax = _apply_tax_rebate(new_taxable, _tax_from_slabs(new_taxable, new_slabs), "new")
+    old_tax_with_cess = old_tax * 1.04
+    new_tax_with_cess = new_tax * 1.04
+
+    recommended_regime = "old" if old_tax_with_cess < new_tax_with_cess else "new"
+    tax_saved = abs(old_tax_with_cess - new_tax_with_cess)
+
+    plan = [
+        "Max out 80C (ELSS/PPF/EPF) if staying in old regime.",
+        "Use NPS additional deduction where applicable.",
+        "Track HRA and home-loan documents in one place.",
+        "Review regime choice at start of each financial year.",
+    ]
+
+    return {
+        "inputs": {
+            "annual_income": annual_income,
+            "deductions_80c": deductions_80c,
+            "hra_exemption": hra_exemption,
+            "home_loan_interest": home_loan_interest,
+        },
+        "old_regime": {
+            "taxable_income": round(old_taxable, 2),
+            "tax_payable": round(old_tax_with_cess, 2),
+            "tax_payable_inr": format_inr(old_tax_with_cess),
+        },
+        "new_regime": {
+            "taxable_income": round(new_taxable, 2),
+            "tax_payable": round(new_tax_with_cess, 2),
+            "tax_payable_inr": format_inr(new_tax_with_cess),
+        },
+        "recommended_regime": recommended_regime,
+        "tax_saved": round(tax_saved, 2),
+        "tax_saved_inr": format_inr(tax_saved),
+        "tax_plan": plan,
+        "section_80c_suggestions": [
+            "ELSS for tax + equity growth",
+            "PPF for long-term safety",
+            "EPF/VPF via payroll",
+        ],
+    }
+
+
+def _parse_purchase_date(value: Any) -> date:
+    if isinstance(value, date):
+        return value
+    text = str(value or "").strip()
+    if not text:
+        return date.today()
+    try:
+        return datetime.strptime(text, "%Y-%m-%d").date()
+    except ValueError:
+        return date.today()
+
+
+def _holding_period_months(start: date) -> int:
+    today = date.today()
+    return max(0, (today.year - start.year) * 12 + (today.month - start.month))
+
+
+def _xirr(cashflows: List[Tuple[date, float]], guess: float = 0.12) -> float:
+    if not cashflows:
+        return 0.0
+    start = min(d for d, _ in cashflows)
+
+    def npv(rate: float) -> float:
+        total = 0.0
+        for dt, amount in cashflows:
+            years = (dt - start).days / 365.0
+            total += amount / ((1 + rate) ** years)
+        return total
+
+    rate = guess
+    for _ in range(50):
+        f_val = npv(rate)
+        delta = 1e-5
+        derivative = (npv(rate + delta) - f_val) / delta
+        if abs(derivative) < 1e-9:
+            break
+        next_rate = rate - f_val / derivative
+        if not math.isfinite(next_rate):
+            break
+        if abs(next_rate - rate) < 1e-7:
+            rate = next_rate
+            break
+        rate = clamp(next_rate, -0.99, 5.0)
+    return rate
+
+
+def _extract_overlap_weights(text_items: List[str]) -> Dict[str, float]:
+    weights: Dict[str, float] = {}
+    for raw in text_items:
+        if not raw:
+            continue
+        parts = raw.strip().rsplit(" ", 1)
+        if len(parts) == 2:
+            name, pct = parts
+            weight = safe_float(pct.replace("%", ""), 0.0)
+            if weight > 0:
+                weights[name.strip().lower()] = weight
+    return weights
+
+
+def portfolio_xray(inputs: Dict[str, Any]) -> Dict[str, Any]:
+    funds = inputs.get("funds") or []
+    parsed_funds: List[Dict[str, Any]] = []
+    total_current = 0.0
+
+    for item in funds:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "Fund").strip() or "Fund"
+        purchase_amount = max(0.0, safe_float(item.get("purchase_amount"), 0.0))
+        current_value = max(0.0, safe_float(item.get("current_value"), purchase_amount))
+        purchase_date = _parse_purchase_date(item.get("purchase_date"))
+        holdings_raw = [
+            str(item.get("holding_1") or "").strip(),
+            str(item.get("holding_2") or "").strip(),
+            str(item.get("holding_3") or "").strip(),
+        ]
+        weights = _extract_overlap_weights(holdings_raw)
+
+        total_current += current_value
+        parsed_funds.append(
+            {
+                "name": name,
+                "purchase_amount": purchase_amount,
+                "current_value": current_value,
+                "purchase_date": purchase_date,
+                "holding_months": _holding_period_months(purchase_date),
+                "weights": weights,
+            }
+        )
+
+    cashflows: List[Tuple[date, float]] = []
+    for fund in parsed_funds:
+        cashflows.append((fund["purchase_date"], -fund["purchase_amount"]))
+    cashflows.append((date.today(), total_current))
+    xirr_value = _xirr(cashflows) if total_current > 0 else 0.0
+
+    overlap_rows: List[Dict[str, Any]] = []
+    for i in range(len(parsed_funds)):
+        for j in range(i + 1, len(parsed_funds)):
+            f1 = parsed_funds[i]
+            f2 = parsed_funds[j]
+            shared = set(f1["weights"].keys()) & set(f2["weights"].keys())
+            overlap_pct = sum(min(f1["weights"][k], f2["weights"][k]) for k in shared)
+            overlap_rows.append(
+                {
+                    "fund_a": f1["name"],
+                    "fund_b": f2["name"],
+                    "overlap_percent": round(overlap_pct, 2),
+                    "shared_stocks": sorted(shared),
+                }
+            )
+
+    regular_er = max(0.0, safe_float(inputs.get("regular_expense_ratio"), 2.0)) / 100
+    direct_er = max(0.0, safe_float(inputs.get("direct_expense_ratio"), 1.5)) / 100
+    annual_cost_regular = total_current * regular_er
+    annual_cost_direct = total_current * direct_er
+    annual_savings = max(0.0, annual_cost_regular - annual_cost_direct)
+    ten_year_impact = annual_savings * (((1 + 0.12) ** 10 - 1) / 0.12) if annual_savings else 0.0
+
+    rebalancing_plan: List[Dict[str, Any]] = []
+    for fund in parsed_funds:
+        wait_months = max(0, 12 - fund["holding_months"])
+        action = "Hold" if wait_months > 0 else "Switch to lower overlap / direct plan"
+        rebalancing_plan.append(
+            {
+                "fund": fund["name"],
+                "holding_months": fund["holding_months"],
+                "wait_months_for_ltcg": wait_months,
+                "action": action,
+            }
+        )
+
+    recommendations: List[str] = []
+    for pair in sorted(overlap_rows, key=lambda x: x["overlap_percent"], reverse=True)[:3]:
+        if pair["overlap_percent"] >= 20:
+            recommendations.append(
+                f"High overlap: {pair['fund_a']} vs {pair['fund_b']} ({pair['overlap_percent']}%). Consider one replacement."
+            )
+    if annual_savings > 0:
+        recommendations.append(
+            f"Switching to direct plans can save about {format_inr(annual_savings)} yearly."
+        )
+    if not recommendations:
+        recommendations.append("Portfolio overlap and costs look healthy. Continue annual review.")
+
+    return {
+        "xirr": round(xirr_value * 100, 2),
+        "xirr_label": f"{round(xirr_value * 100, 2)}%",
+        "overlap_matrix": overlap_rows,
+        "expense_analysis": {
+            "regular_expense_ratio": round(regular_er * 100, 2),
+            "direct_expense_ratio": round(direct_er * 100, 2),
+            "annual_cost_regular": round(annual_cost_regular, 2),
+            "annual_cost_regular_inr": format_inr(annual_cost_regular),
+            "annual_cost_direct": round(annual_cost_direct, 2),
+            "annual_cost_direct_inr": format_inr(annual_cost_direct),
+            "annual_savings": round(annual_savings, 2),
+            "annual_savings_inr": format_inr(annual_savings),
+            "ten_year_impact": round(ten_year_impact, 2),
+            "ten_year_impact_inr": format_inr(ten_year_impact),
+        },
+        "rebalancing_plan": rebalancing_plan,
+        "recommendations": recommendations,
+    }
+
+
+def recalculate_fire_projection(
+    profile: Dict[str, Any],
+    retirement_age: float,
+    expected_returns: float,
+    target_monthly_corpus_draw: float,
+) -> Dict[str, Any]:
+    current_age = safe_float(profile.get("age"), 30)
+    years_left = max(1.0, retirement_age - current_age)
+    annual_expenses_target = max(100000.0, target_monthly_corpus_draw * 12)
+    fire_number = annual_expenses_target * 25
+
+    current_corpus = (
+        safe_float(profile.get("existing_savings"))
+        + safe_float(profile.get("existing_investments"))
+        + safe_float(profile.get("emergency_fund"))
+    )
+    monthly_surplus = max(0.0, safe_float(profile.get("monthly_surplus")))
+    annual_return = clamp(expected_returns / 100, 0.01, 0.25)
+    months_to_fire = _estimate_fire_timeline_with_inflation(
+        current_corpus,
+        monthly_surplus,
+        fire_number,
+        annual_return,
+        INFLATION_ANNUAL,
+    )
+
+    years_to_fire = (months_to_fire / 12) if math.isfinite(months_to_fire) else None
+    sip_needed = _sip_payment_for_target(max(0.0, fire_number - current_corpus), int(years_left * 12), annual_return)
+
+    return {
+        "fire_number": round(fire_number, 2),
+        "fire_number_inr": format_inr(fire_number),
+        "years_to_fire": round(years_to_fire, 1) if years_to_fire is not None else None,
+        "monthly_sip_needed": round(sip_needed, 2),
+        "monthly_sip_needed_inr": format_inr(sip_needed),
+        "assumptions": {
+            "retirement_age": round(retirement_age, 1),
+            "expected_returns": round(expected_returns, 2),
+            "target_monthly_corpus_draw": round(target_monthly_corpus_draw, 2),
+        },
+    }
+
+
+def compute_health_score_quick(profile: Dict[str, Any], fire_projection: Dict[str, Any]) -> Dict[str, Any]:
+    monthly_income = max(1.0, safe_float(profile.get("monthly_income"), 1.0))
+    monthly_expenses = safe_float(profile.get("monthly_expenses"), 0.0)
+    emergency_fund = safe_float(profile.get("emergency_fund"), 0.0)
+    emergency_target = monthly_expenses * 6
+    emergency_score = int(round(clamp(emergency_fund / max(1.0, emergency_target), 0, 1) * 20))
+
+    insurance_score = 0
+    if bool(profile.get("has_term_insurance")):
+        insurance_score += 10
+    if bool(profile.get("has_health_insurance")):
+        insurance_score += 10
+
+    debt_health_score = 15 if monthly_expenses / monthly_income <= 0.5 else 8
+
+    years_to_fire = fire_projection.get("years_to_fire")
+    if years_to_fire is None:
+        retirement_score = 4
+    elif years_to_fire <= 20:
+        retirement_score = 15
+    elif years_to_fire <= 30:
+        retirement_score = 11
+    else:
+        retirement_score = 7
+
+    diversification_score = 15 if normalize_risk(profile.get("risk_appetite")) != "conservative" else 12
+    tax_efficiency_score = 12
+
+    breakdown = {
+        "Emergency Preparedness": emergency_score,
+        "Insurance Coverage": insurance_score,
+        "Investment Diversification": diversification_score,
+        "Debt Health": debt_health_score,
+        "Tax Efficiency": tax_efficiency_score,
+        "Retirement Readiness": retirement_score,
+    }
+    return {"health_score": sum(breakdown.values()), "score_breakdown": breakdown}

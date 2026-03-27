@@ -55,6 +55,18 @@ body {
   margin: clamp(20px, 4vw, 36px) auto clamp(28px, 7vw, 60px);
 }
 
+.top-disclaimer {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: #09324c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 10px 14px;
+  text-align: center;
+  font-weight: 600;
+  color: #e8f9ff;
+}
+
 .hero h1 {
   font-family: "Sora", sans-serif;
   font-size: clamp(1.9rem, 4vw, 3rem);
@@ -81,6 +93,36 @@ body {
   padding: clamp(14px, 2.4vw, 20px);
   margin-top: 18px;
   animation: fadeIn 0.45s ease;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tab-btn {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-family: "Sora", sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab-btn.active {
+  background: rgba(0, 212, 170, 0.22);
+  border-color: rgba(0, 212, 170, 0.6);
+}
+
+.tab-pane {
+  display: none;
+}
+
+.tab-pane.active {
+  display: block;
 }
 
 h2,
@@ -164,6 +206,18 @@ select {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.loading-steps {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.loading-steps .done {
+  color: #8cf3dc;
 }
 
 .spinner {
@@ -258,6 +312,9 @@ td {
 .gap-card {
   border-radius: 12px;
   padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .gap-high {
@@ -288,6 +345,33 @@ td {
 .motivation {
   color: var(--accent);
   font-weight: 600;
+}
+
+.section-disclaimer {
+  margin-top: 14px;
+  color: #b8cae8;
+  font-size: 0.9rem;
+}
+
+.recalc-box {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.fund-row {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.audit-row {
+  border-left: 3px solid var(--accent);
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 #priority-actions {
@@ -332,6 +416,10 @@ canvas {
   .hero h1 {
     font-size: clamp(1.7rem, 6vw, 2.5rem);
   }
+
+  .tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 880px) {
@@ -371,6 +459,10 @@ canvas {
 
   .goals-header .ghost-btn {
     width: auto;
+  }
+
+  .tabs {
+    grid-template-columns: 1fr;
   }
 
   th,

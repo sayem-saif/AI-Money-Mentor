@@ -1,4 +1,7 @@
 import os
+import json
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict
 
 from dotenv import load_dotenv
@@ -6,11 +9,49 @@ from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
 
 from agents import run_orchestration, run_orchestration_with_model
+from agents.fire_calculator_agent import calculate_fire
+from agents.portfolio_xray_agent import run_portfolio_xray
+from agents.tax_wizard_agent import run_tax_wizard
+from tools.finance_tools import compute_health_score_quick, recalculate_fire_projection, validate_and_structure_profile
 
 load_dotenv(override=True)
 
 app = Flask(__name__)
 CORS(app)
+
+AUDIT_LOG_FILE = Path("audit_trail.jsonl")
+
+
+def _append_audit_log(endpoint: str, status: str, payload: Dict[str, Any], response: Dict[str, Any]) -> None:
+    AUDIT_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "endpoint": endpoint,
+        "status": status,
+        "input": payload,
+        "output_summary": {
+            "health_score": response.get("health_score") if isinstance(response, dict) else None,
+            "keys": list(response.keys())[:15] if isinstance(response, dict) else [],
+        },
+    }
+    with AUDIT_LOG_FILE.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _read_audit_logs(limit: int = 100) -> list[Dict[str, Any]]:
+    if not AUDIT_LOG_FILE.exists():
+        return []
+    rows: list[Dict[str, Any]] = []
+    with AUDIT_LOG_FILE.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                rows.append(json.loads(text))
+            except json.JSONDecodeError:
+                continue
+    return rows[-limit:][::-1]
 
 
 def _has_required_fields(item: Any, required: list[str]) -> bool:
@@ -140,9 +181,11 @@ def analyze() -> Any:
             print("[API] Using deterministic orchestration mode...")
             report = run_orchestration(payload)
         print("[API] Analysis complete.")
+        _append_audit_log("/api/analyze", "success", payload, report)
         return jsonify(report)
     except Exception as exc:
         print(f"[API] Analysis failed: {exc}")
+        _append_audit_log("/api/analyze", "error", payload, {"error": str(exc)})
         return (
             jsonify(
                 {
@@ -152,6 +195,78 @@ def analyze() -> Any:
             ),
             500,
         )
+
+
+@app.route("/api/tax-wizard", methods=["POST"])
+def tax_wizard() -> Any:
+    payload: Dict[str, Any] = request.get_json(silent=True) or {}
+    if not payload:
+        return jsonify({"error": "Request body must be valid JSON."}), 400
+    try:
+        result = run_tax_wizard(payload)
+        _append_audit_log("/api/tax-wizard", "success", payload, result)
+        return jsonify(result)
+    except Exception as exc:
+        _append_audit_log("/api/tax-wizard", "error", payload, {"error": str(exc)})
+        return jsonify({"error": "Failed to run tax wizard.", "details": str(exc)}), 500
+
+
+@app.route("/api/portfolio-xray", methods=["POST"])
+def portfolio_xray() -> Any:
+    payload: Dict[str, Any] = request.get_json(silent=True) or {}
+    if not payload:
+        return jsonify({"error": "Request body must be valid JSON."}), 400
+    try:
+        result = run_portfolio_xray(payload)
+        _append_audit_log("/api/portfolio-xray", "success", payload, result)
+        return jsonify(result)
+    except Exception as exc:
+        _append_audit_log("/api/portfolio-xray", "error", payload, {"error": str(exc)})
+        return jsonify({"error": "Failed to run portfolio x-ray.", "details": str(exc)}), 500
+
+
+@app.route("/api/audit-log", methods=["GET"])
+def audit_log() -> Any:
+    limit_raw = request.args.get("limit", "50")
+    try:
+        limit = max(1, min(500, int(limit_raw)))
+    except ValueError:
+        limit = 50
+    return jsonify({"logs": _read_audit_logs(limit)})
+
+
+@app.route("/api/recalculate", methods=["POST"])
+def recalculate() -> Any:
+    payload: Dict[str, Any] = request.get_json(silent=True) or {}
+    profile_input = payload.get("profile")
+    if not isinstance(profile_input, dict):
+        return jsonify({"error": "profile object is required for recalculation."}), 400
+
+    retirement_age = float(payload.get("retirement_age", 60))
+    expected_returns = float(payload.get("expected_returns", 11))
+    target_monthly_corpus_draw = float(payload.get("target_monthly_corpus_draw", 100000))
+
+    try:
+        profile = validate_and_structure_profile(profile_input)
+        # Requirement alignment: keep the recalculation path FIRE-focused.
+        _ = calculate_fire(profile)
+        fire_projection = recalculate_fire_projection(
+            profile=profile,
+            retirement_age=retirement_age,
+            expected_returns=expected_returns,
+            target_monthly_corpus_draw=target_monthly_corpus_draw,
+        )
+        score = compute_health_score_quick(profile, fire_projection)
+        result = {
+            "fire_data": fire_projection,
+            "health_score": score["health_score"],
+            "score_breakdown": score["score_breakdown"],
+        }
+        _append_audit_log("/api/recalculate", "success", payload, result)
+        return jsonify(result)
+    except Exception as exc:
+        _append_audit_log("/api/recalculate", "error", payload, {"error": str(exc)})
+        return jsonify({"error": "Failed to recalculate.", "details": str(exc)}), 500
 
 
 if __name__ == "__main__":

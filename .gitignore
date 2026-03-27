@@ -8,3 +8,4 @@ venv/
 .env.local
 prompt.txt
 Editted prompt.txt
+audit_trail.jsonl
