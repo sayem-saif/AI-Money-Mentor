@@ -359,43 +359,60 @@ function renderResults(data) {
   if (motivationText) motivationText.textContent = data.motivational_message || "";
 }
 
-function loadDemoData() {
-  const setIfExists = (selector, value) => {
-    const el = document.querySelector(selector);
-    if (el) el.value = value;
-  };
-  
-  setIfExists("input[name='name']", "Arjun Sharma");
-  setIfExists("input[name='age']", "34");
-  setIfExists("input[name='monthly_income']", "200000");
-  setIfExists("input[name='monthly_expenses']", "80000");
-  setIfExists("input[name='existing_savings']", "50000");
-  setIfExists("input[name='existing_investments']", "1800000");
-  setIfExists("input[name='emergency_fund']", "30000");
-  setIfExists("select[name='risk_appetite']", "moderate");
-  setIfExists("input[name='has_term_insurance']", "false");
-  setIfExists("input[name='has_health_insurance']", "true");
-  
-  goalsList.innerHTML = "";
-  addGoalRow({ name: "Emergency Fund Top-up", target_amount: 270000, years: 1 });
-  addGoalRow({ name: "Europe Trip", target_amount: 300000, years: 2 });
-  addGoalRow({ name: "Home Down Payment", target_amount: 2000000, years: 7 });
-  addGoalRow({ name: "Retirement Corpus", target_amount: 30000000, years: 16 });
+async function loadDemoData() {
+  try {
+    const response = await fetch("/api/get-demo-data");
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    const data = await response.json();
+    
+    const setIfExists = (selector, value) => {
+      const el = document.querySelector(selector);
+      if (el) el.value = value;
+    };
+    
+    setIfExists("input[name='name']", data.name);
+    setIfExists("input[name='age']", data.age);
+    setIfExists("input[name='monthly_income']", data.monthly_income);
+    setIfExists("input[name='monthly_expenses']", data.monthly_expenses);
+    setIfExists("input[name='existing_savings']", data.existing_savings);
+    setIfExists("input[name='existing_investments']", data.existing_investments);
+    setIfExists("input[name='emergency_fund']", data.emergency_fund);
+    setIfExists("select[name='risk_appetite']", data.risk_appetite);
+    setIfExists("input[name='has_term_insurance']", data.has_term_insurance);
+    setIfExists("input[name='has_health_insurance']", data.has_health_insurance);
+    
+    goalsList.innerHTML = "";
+    if (data.goals && Array.isArray(data.goals)) {
+      data.goals.forEach(goal => addGoalRow(goal));
+    }
+  } catch (error) {
+    console.error("Failed to load demo data:", error);
+    alert("Failed to load demo data. Please check the console.");
+  }
 }
 
-function loadDemoDataTax() {
-  const setIfExists = (selector, value) => {
-    const el = document.querySelector(selector);
-    if (el) el.value = value;
-  };
-  
-  setIfExists("input[name='annual_income']", "1800000");
-  setIfExists("input[name='deductions_80c']", "150000");
-  setIfExists("input[name='hra_exemption']", "360000");
-  setIfExists("input[name='home_loan_interest']", "40000");
-  setIfExists("input[name='nps_contribution']", "50000");
-  setIfExists("select[name='city_type']", "metro");
-  setIfExists("input[name='monthly_rent']", "30000");
+async function loadDemoDataTax() {
+  try {
+    const response = await fetch("/api/get-demo-data-tax");
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    const data = await response.json();
+    
+    const setIfExists = (selector, value) => {
+      const el = document.querySelector(selector);
+      if (el) el.value = value;
+    };
+    
+    setIfExists("input[name='annual_income']", data.annual_income);
+    setIfExists("input[name='deductions_80c']", data.deductions_80c);
+    setIfExists("input[name='hra_exemption']", data.hra_exemption);
+    setIfExists("input[name='home_loan_interest']", data.home_loan_interest);
+    setIfExists("input[name='nps_contribution']", data.nps_contribution);
+    setIfExists("select[name='city_type']", data.city_type);
+    setIfExists("input[name='monthly_rent']", data.monthly_rent);
+  } catch (error) {
+    console.error("Failed to load tax demo data:", error);
+    alert("Failed to load tax demo data. Please check the console.");
+  }
 }
 
 function renderTaxResults(data) {

@@ -283,6 +283,45 @@ def recalculate() -> Any:
         return jsonify({"error": "Failed to recalculate.", "details": str(exc)}), 500
 
 
+@app.route("/api/get-demo-data", methods=["GET"])
+def get_demo_data() -> Any:
+    """Returns hardcoded demo data for dashboard form."""
+    demo_data = {
+        "name": "Arjun Sharma",
+        "age": "34",
+        "monthly_income": "200000",
+        "monthly_expenses": "80000",
+        "existing_savings": "50000",
+        "existing_investments": "1800000",
+        "emergency_fund": "30000",
+        "risk_appetite": "moderate",
+        "has_term_insurance": "false",
+        "has_health_insurance": "true",
+        "goals": [
+            {"name": "Emergency Fund Top-up", "target_amount": 270000, "years": 1},
+            {"name": "Europe Trip", "target_amount": 300000, "years": 2},
+            {"name": "Home Down Payment", "target_amount": 2000000, "years": 7},
+            {"name": "Retirement Corpus", "target_amount": 30000000, "years": 16}
+        ]
+    }
+    return jsonify(demo_data)
+
+
+@app.route("/api/get-demo-data-tax", methods=["GET"])
+def get_demo_data_tax() -> Any:
+    """Returns hardcoded demo data for tax wizard form."""
+    demo_data = {
+        "annual_income": "1800000",
+        "deductions_80c": "150000",
+        "hra_exemption": "360000",
+        "home_loan_interest": "40000",
+        "nps_contribution": "50000",
+        "city_type": "metro",
+        "monthly_rent": "30000"
+    }
+    return jsonify(demo_data)
+
+
 @app.errorhandler(404)
 def handle_404(error: Any) -> Any:
     if request.path.startswith("/api/"):
