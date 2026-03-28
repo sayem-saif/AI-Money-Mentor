@@ -17,13 +17,16 @@ const fundsList = document.getElementById("funds-list");
 const recalculateBtn = document.getElementById("recalculate-btn");
 
 let latestProfilePayload = null;
+let analyzeRequestInFlight = false;
 
 async function apiFetch(path, options = {}) {
   try {
     return await fetch(path, options);
   } catch (error) {
+    const hostname = window.location.hostname || "";
+    const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
     const currentPort = window.location.port;
-    const shouldTryFallback = currentPort !== "5000";
+    const shouldTryFallback = isLocalHost && currentPort !== "5000";
     if (!shouldTryFallback) {
       throw error;
     }
@@ -278,68 +281,82 @@ function renderResults(data) {
   renderScoreBars(data.score_breakdown || {});
 
   const fire = data.fire_data || {};
-  document.getElementById("fire-summary").innerHTML = `
-    <p><strong>FIRE Number:</strong> ${fire.fire_number_inr || formatINR(fire.fire_number)}</p>
-    <p><strong>Years to FIRE:</strong> ${fire.years_to_fire ?? "N/A"}</p>
-    <p><strong>Total SIP Needed:</strong> ${fire.monthly_sip_needed_inr || formatINR(fire.monthly_sip_needed)}</p>
-    <p><strong>Allocation:</strong> Equity ${fire.asset_allocation?.equity_percent ?? "-"}% | Debt ${fire.asset_allocation?.debt_percent ?? "-"}%</p>
-  `;
+  const fireSummary = document.getElementById("fire-summary");
+  if (fireSummary) {
+    fireSummary.innerHTML = `
+      <p><strong>FIRE Number:</strong> ${fire.fire_number_inr || formatINR(fire.fire_number)}</p>
+      <p><strong>Years to FIRE:</strong> ${fire.years_to_fire ?? "N/A"}</p>
+      <p><strong>Total SIP Needed:</strong> ${fire.monthly_sip_needed_inr || formatINR(fire.monthly_sip_needed)}</p>
+      <p><strong>Allocation:</strong> Equity ${fire.asset_allocation?.equity_percent ?? "-"}% | Debt ${fire.asset_allocation?.debt_percent ?? "-"}%</p>
+    `;
+  }
 
   const goalsBody = document.getElementById("goals-table-body");
-  goalsBody.innerHTML = "";
-  (data.goals_sip || []).forEach((goal) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${escapeHtml(goal.name)}</td>
-      <td>${formatINR(goal.target_amount)}</td>
-      <td>${goal.years}</td>
-      <td>${goal.required_monthly_sip_inr || formatINR(goal.required_monthly_sip)}</td>
-    `;
-    goalsBody.appendChild(tr);
-  });
+  if (goalsBody) {
+    goalsBody.innerHTML = "";
+    (data.goals_sip || []).forEach((goal) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(goal.name)}</td>
+        <td>${formatINR(goal.target_amount)}</td>
+        <td>${goal.years}</td>
+        <td>${goal.required_monthly_sip_inr || formatINR(goal.required_monthly_sip)}</td>
+      `;
+      goalsBody.appendChild(tr);
+    });
+  }
 
   const gaps = document.getElementById("gap-cards");
-  gaps.innerHTML = "";
-  (data.gaps || []).forEach((gap) => {
-    const level = String(gap.severity || "low").toLowerCase();
-    const card = document.createElement("div");
-    card.className = `gap-card gap-${level}`;
-    card.innerHTML = `
-      <h3>${escapeHtml(gap.gap_type)} (${escapeHtml(gap.severity)})</h3>
-      <p><strong>Current:</strong> ${escapeHtml(gap.current_value)}</p>
-      <p><strong>Recommended:</strong> ${escapeHtml(gap.recommended_value)}</p>
-      <p>${escapeHtml(gap.action)}</p>
-      <button class="ghost-btn">Learn How -></button>
-    `;
-    gaps.appendChild(card);
-  });
+  if (gaps) {
+    gaps.innerHTML = "";
+    (data.gaps || []).forEach((gap) => {
+      const level = String(gap.severity || "low").toLowerCase();
+      const card = document.createElement("div");
+      card.className = `gap-card gap-${level}`;
+      card.innerHTML = `
+        <h3>${escapeHtml(gap.gap_type)} (${escapeHtml(gap.severity)})</h3>
+        <p><strong>Current:</strong> ${escapeHtml(gap.current_value)}</p>
+        <p><strong>Recommended:</strong> ${escapeHtml(gap.recommended_value)}</p>
+        <p>${escapeHtml(gap.action)}</p>
+        <button class="ghost-btn">Learn How -></button>
+      `;
+      gaps.appendChild(card);
+    });
+  }
 
   const actions = document.getElementById("priority-actions");
-  actions.innerHTML = "";
-  (data.priority_actions || []).forEach((action) => {
-    const li = document.createElement("li");
-    if (typeof action === "string") {
-      li.textContent = action;
-    } else if (action && typeof action === "object") {
-      const label = action.priority ? `[${action.priority}] ` : "";
-      li.textContent = `${label}${action.action || action.step || "Action item"}`;
-    } else {
-      li.textContent = String(action || "Action item");
-    }
-    actions.appendChild(li);
-  });
+  if (actions) {
+    actions.innerHTML = "";
+    (data.priority_actions || []).forEach((action) => {
+      const li = document.createElement("li");
+      if (typeof action === "string") {
+        li.textContent = action;
+      } else if (action && typeof action === "object") {
+        const label = action.priority ? `[${action.priority}] ` : "";
+        li.textContent = `${label}${action.action || action.step || "Action item"}`;
+      } else {
+        li.textContent = String(action || "Action item");
+      }
+      actions.appendChild(li);
+    });
+  }
 
   const roadmap = document.getElementById("roadmap");
-  roadmap.innerHTML = "";
-  (data.roadmap || []).forEach((item) => {
-    const div = document.createElement("div");
-    div.className = "road-item";
-    div.innerHTML = `<strong>Month ${item.month}:</strong> ${escapeHtml(item.action)}`;
-    roadmap.appendChild(div);
-  });
+  if (roadmap) {
+    roadmap.innerHTML = "";
+    (data.roadmap || []).forEach((item) => {
+      const div = document.createElement("div");
+      div.className = "road-item";
+      div.innerHTML = `<strong>Month ${item.month}:</strong> ${escapeHtml(item.action)}`;
+      roadmap.appendChild(div);
+    });
+  }
 
-  document.getElementById("summary-text").textContent = data.summary || "";
-  document.getElementById("motivation-text").textContent = data.motivational_message || "";
+  const summaryText = document.getElementById("summary-text");
+  if (summaryText) summaryText.textContent = data.summary || "";
+
+  const motivationText = document.getElementById("motivation-text");
+  if (motivationText) motivationText.textContent = data.motivational_message || "";
 }
 
 function loadDemoData() {
@@ -589,6 +606,9 @@ async function loadAuditTrail() {
 
 if (form) form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (analyzeRequestInFlight) {
+    return;
+  }
 
   const formData = new FormData(form);
   const payload = {
@@ -610,10 +630,14 @@ if (form) form.addEventListener("submit", async (event) => {
     return;
   }
 
+  analyzeRequestInFlight = true;
   latestProfilePayload = payload;
+  results.innerHTML = "";
   results.classList.add("hidden");
   loadingCard.classList.remove("hidden");
   const timer = startLoadingAnimation();
+  const submitBtn = form.querySelector("button[type='submit']");
+  if (submitBtn) submitBtn.disabled = true;
 
   try {
     const response = await apiFetch("/api/analyze", {
@@ -628,8 +652,13 @@ if (form) form.addEventListener("submit", async (event) => {
     results.classList.remove("hidden");
     results.scrollIntoView({ behavior: "smooth" });
   } catch (error) {
-    alert(error.message || "Something went wrong while analyzing your finances.");
+    const message = error?.message || "Something went wrong while analyzing your finances.";
+    results.classList.remove("hidden");
+    results.innerHTML = `<section class="card"><h3>Analysis Error</h3><p>${escapeHtml(message)}</p></section>`;
+    console.error("Analyze request failed:", error);
   } finally {
+    analyzeRequestInFlight = false;
+    if (submitBtn) submitBtn.disabled = false;
     clearInterval(timer);
     loadingCard.classList.add("hidden");
   }
