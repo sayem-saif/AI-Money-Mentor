@@ -269,6 +269,27 @@ def recalculate() -> Any:
         return jsonify({"error": "Failed to recalculate.", "details": str(exc)}), 500
 
 
+@app.errorhandler(404)
+def handle_404(error: Any) -> Any:
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "API endpoint not found.", "path": request.path}), 404
+    return error
+
+
+@app.errorhandler(405)
+def handle_405(error: Any) -> Any:
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Method not allowed for this API endpoint.", "path": request.path}), 405
+    return error
+
+
+@app.errorhandler(500)
+def handle_500(error: Any) -> Any:
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Internal server error."}), 500
+    return error
+
+
 if __name__ == "__main__":
     api_key = os.getenv("OPENROUTER_API_KEY", "")
     if not api_key:

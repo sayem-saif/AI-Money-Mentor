@@ -46,6 +46,27 @@ async function apiFetch(path, options = {}) {
   }
 }
 
+async function parseApiJson(response, defaultMessage) {
+  const rawText = await response.text();
+  let data = {};
+
+  if (rawText) {
+    try {
+      data = JSON.parse(rawText);
+    } catch (_error) {
+      const snippet = rawText.slice(0, 120).replace(/\s+/g, " ").trim();
+      const statusInfo = `HTTP ${response.status}`;
+      throw new Error(`${defaultMessage} (${statusInfo}). Server returned non-JSON response: ${snippet}`);
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error || data.details || `${defaultMessage} (HTTP ${response.status})`);
+  }
+
+  return data;
+}
+
 const loadingMessages = [
   "Profiling your finances...",
   "Calculating your FIRE number...",
@@ -534,10 +555,7 @@ function updateSliderLabels() {
 async function loadAuditTrail() {
   try {
     const response = await apiFetch("/api/audit-log");
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "Could not fetch audit logs.");
-    }
+    const data = await parseApiJson(response, "Could not fetch audit logs");
 
     const logs = data.logs || [];
     const auditResults = document.getElementById("audit-results");
@@ -569,7 +587,7 @@ async function loadAuditTrail() {
   }
 }
 
-form.addEventListener("submit", async (event) => {
+if (form) form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const formData = new FormData(form);
@@ -604,10 +622,7 @@ form.addEventListener("submit", async (event) => {
       body: JSON.stringify(payload),
     });
 
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "Analysis failed.");
-    }
+    const data = await parseApiJson(response, "Analysis failed");
 
     renderResults(data);
     results.classList.remove("hidden");
@@ -620,7 +635,7 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-recalculateBtn.addEventListener("click", async () => {
+if (recalculateBtn) recalculateBtn.addEventListener("click", async () => {
   if (!latestProfilePayload) {
     alert("Run dashboard analysis first, then recalculate.");
     return;
@@ -637,10 +652,7 @@ recalculateBtn.addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "Recalculation failed.");
-    }
+    const data = await parseApiJson(response, "Recalculation failed");
     renderGauge(data.health_score);
     renderScoreBreakdown(data.score_breakdown || {});
     renderScoreBars(data.score_breakdown || {});
@@ -656,7 +668,7 @@ recalculateBtn.addEventListener("click", async () => {
   }
 });
 
-taxForm.addEventListener("submit", async (event) => {
+if (taxForm) taxForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(taxForm);
   const payload = {
@@ -675,10 +687,7 @@ taxForm.addEventListener("submit", async (event) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "Tax wizard failed.");
-    }
+    const data = await parseApiJson(response, "Tax wizard failed");
 
     renderTaxResults(data);
   } catch (error) {
@@ -687,7 +696,7 @@ taxForm.addEventListener("submit", async (event) => {
   }
 });
 
-portfolioForm.addEventListener("submit", async (event) => {
+if (portfolioForm) portfolioForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const payload = {
@@ -707,10 +716,7 @@ portfolioForm.addEventListener("submit", async (event) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "Portfolio x-ray failed.");
-    }
+    const data = await parseApiJson(response, "Portfolio x-ray failed");
 
     portfolioResults.classList.remove("hidden");
     portfolioResults.innerHTML = `
@@ -752,9 +758,9 @@ portfolioForm.addEventListener("submit", async (event) => {
   }
 });
 
-refreshAuditBtn.addEventListener("click", loadAuditTrail);
-addGoalBtn.addEventListener("click", () => addGoalRow());
-addFundBtn.addEventListener("click", () => addFundRow());
+if (refreshAuditBtn) refreshAuditBtn.addEventListener("click", loadAuditTrail);
+if (addGoalBtn) addGoalBtn.addEventListener("click", () => addGoalRow());
+if (addFundBtn) addFundBtn.addEventListener("click", () => addFundRow());
 
 ["slider-retirement-age", "slider-returns", "slider-draw"].forEach((id) => {
   const el = document.getElementById(id);
