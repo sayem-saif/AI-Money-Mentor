@@ -632,7 +632,6 @@ if (form) form.addEventListener("submit", async (event) => {
 
   analyzeRequestInFlight = true;
   latestProfilePayload = payload;
-  results.innerHTML = "";
   results.classList.add("hidden");
   loadingCard.classList.remove("hidden");
   const timer = startLoadingAnimation();
@@ -653,8 +652,7 @@ if (form) form.addEventListener("submit", async (event) => {
     results.scrollIntoView({ behavior: "smooth" });
   } catch (error) {
     const message = error?.message || "Something went wrong while analyzing your finances.";
-    results.classList.remove("hidden");
-    results.innerHTML = `<section class="card"><h3>Analysis Error</h3><p>${escapeHtml(message)}</p></section>`;
+    alert(message);
     console.error("Analyze request failed:", error);
   } finally {
     analyzeRequestInFlight = false;
