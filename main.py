@@ -19,54 +19,39 @@ load_dotenv(override=True)
 app = Flask(__name__)
 CORS(app)
 
-def _resolve_audit_log_file() -> Path:
-    """Use writable location on serverless platforms like Vercel."""
-    if os.getenv("VERCEL"):
-        return Path("/tmp/audit_trail.jsonl")
-    return Path("audit_trail.jsonl")
-
-
-AUDIT_LOG_FILE = _resolve_audit_log_file()
+AUDIT_LOG_FILE = Path("audit_trail.jsonl")
 
 
 def _append_audit_log(endpoint: str, status: str, payload: Dict[str, Any], response: Dict[str, Any]) -> None:
-    try:
-        AUDIT_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        record = {
-            "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
-            "endpoint": endpoint,
-            "status": status,
-            "input": payload,
-            "output_summary": {
-                "health_score": response.get("health_score") if isinstance(response, dict) else None,
-                "keys": list(response.keys())[:15] if isinstance(response, dict) else [],
-            },
-        }
-        with AUDIT_LOG_FILE.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except Exception as exc:
-        # Logging failures should never break API responses.
-        print(f"[Audit] Failed to append audit log: {exc}")
+    AUDIT_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "endpoint": endpoint,
+        "status": status,
+        "input": payload,
+        "output_summary": {
+            "health_score": response.get("health_score") if isinstance(response, dict) else None,
+            "keys": list(response.keys())[:15] if isinstance(response, dict) else [],
+        },
+    }
+    with AUDIT_LOG_FILE.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def _read_audit_logs(limit: int = 100) -> list[Dict[str, Any]]:
-    try:
-        if not AUDIT_LOG_FILE.exists():
-            return []
-        rows: list[Dict[str, Any]] = []
-        with AUDIT_LOG_FILE.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                text = line.strip()
-                if not text:
-                    continue
-                try:
-                    rows.append(json.loads(text))
-                except json.JSONDecodeError:
-                    continue
-        return rows[-limit:][::-1]
-    except Exception as exc:
-        print(f"[Audit] Failed to read audit logs: {exc}")
+    if not AUDIT_LOG_FILE.exists():
         return []
+    rows: list[Dict[str, Any]] = []
+    with AUDIT_LOG_FILE.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                rows.append(json.loads(text))
+            except json.JSONDecodeError:
+                continue
+    return rows[-limit:][::-1]
 
 
 def _has_required_fields(item: Any, required: list[str]) -> bool:
@@ -171,38 +156,27 @@ def analyze() -> Any:
 
     try:
         print("[API] Starting AI Money Mentor multi-agent analysis...")
-        default_use_model = "false" if os.getenv("VERCEL") else "true"
-        use_model_mode = os.getenv("USE_MODEL_AGENT", default_use_model).strip().lower() == "true"
-        has_openrouter_keys = bool(
-            os.getenv("OPENROUTER_API_KEY", "").strip() or os.getenv("OPENROUTER_API_KEYS", "").strip()
-        )
+        use_model_mode = os.getenv("USE_MODEL_AGENT", "true").strip().lower() == "true"
         if use_model_mode:
             print("[API] Using OpenRouter model orchestration mode...")
-            if not has_openrouter_keys:
-                print("[API] OpenRouter keys not found. Falling back to deterministic local orchestration...")
-                report = run_orchestration(payload)
-                report["model_provider"] = "deterministic-fallback"
-                report["model_used"] = "local-python-tools"
-                report["fallback_reason"] = "OPENROUTER_API_KEY/OPENROUTER_API_KEYS missing"
-            else:
-                try:
-                    report = run_orchestration_with_model(payload)
-                    if not _is_model_response_usable(report):
-                        print("[API] Model output schema mismatch detected, repairing response...")
-                        report = _repair_with_deterministic_schema(report, payload)
-                except Exception as model_exc:
-                    print(f"[API] Model chain failed: {model_exc}")
-                    deterministic_fallback = (
-                        os.getenv("ALLOW_DETERMINISTIC_FALLBACK", "true").strip().lower() == "true"
-                    )
-                    if deterministic_fallback:
-                        print("[API] Falling back to deterministic local orchestration...")
-                        report = run_orchestration(payload)
-                        report["model_provider"] = "deterministic-fallback"
-                        report["model_used"] = "local-python-tools"
-                        report["fallback_reason"] = str(model_exc)
-                    else:
-                        raise
+            try:
+                report = run_orchestration_with_model(payload)
+                if not _is_model_response_usable(report):
+                    print("[API] Model output schema mismatch detected, repairing response...")
+                    report = _repair_with_deterministic_schema(report, payload)
+            except Exception as model_exc:
+                print(f"[API] Model chain failed: {model_exc}")
+                deterministic_fallback = (
+                    os.getenv("ALLOW_DETERMINISTIC_FALLBACK", "false").strip().lower() == "true"
+                )
+                if deterministic_fallback:
+                    print("[API] Falling back to deterministic local orchestration...")
+                    report = run_orchestration(payload)
+                    report["model_provider"] = "deterministic-fallback"
+                    report["model_used"] = "local-python-tools"
+                    report["fallback_reason"] = str(model_exc)
+                else:
+                    raise
         else:
             print("[API] Using deterministic orchestration mode...")
             report = run_orchestration(payload)

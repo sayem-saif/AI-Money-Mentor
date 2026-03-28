@@ -17,16 +17,13 @@ const fundsList = document.getElementById("funds-list");
 const recalculateBtn = document.getElementById("recalculate-btn");
 
 let latestProfilePayload = null;
-let analyzeRequestInFlight = false;
 
 async function apiFetch(path, options = {}) {
   try {
     return await fetch(path, options);
   } catch (error) {
-    const hostname = window.location.hostname || "";
-    const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
     const currentPort = window.location.port;
-    const shouldTryFallback = isLocalHost && currentPort !== "5000";
+    const shouldTryFallback = currentPort !== "5000";
     if (!shouldTryFallback) {
       throw error;
     }
@@ -592,9 +589,6 @@ async function loadAuditTrail() {
 
 if (form) form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (analyzeRequestInFlight) {
-    return;
-  }
 
   const formData = new FormData(form);
   const payload = {
@@ -616,14 +610,10 @@ if (form) form.addEventListener("submit", async (event) => {
     return;
   }
 
-  analyzeRequestInFlight = true;
   latestProfilePayload = payload;
-  results.innerHTML = "";
   results.classList.add("hidden");
   loadingCard.classList.remove("hidden");
   const timer = startLoadingAnimation();
-  const submitBtn = form.querySelector("button[type='submit']");
-  if (submitBtn) submitBtn.disabled = true;
 
   try {
     const response = await apiFetch("/api/analyze", {
@@ -638,13 +628,8 @@ if (form) form.addEventListener("submit", async (event) => {
     results.classList.remove("hidden");
     results.scrollIntoView({ behavior: "smooth" });
   } catch (error) {
-    const message = error?.message || "Something went wrong while analyzing your finances.";
-    results.classList.remove("hidden");
-    results.innerHTML = `<section class="card"><h3>Analysis Error</h3><p>${escapeHtml(message)}</p></section>`;
-    console.error("Analyze request failed:", error);
+    alert(error.message || "Something went wrong while analyzing your finances.");
   } finally {
-    analyzeRequestInFlight = false;
-    if (submitBtn) submitBtn.disabled = false;
     clearInterval(timer);
     loadingCard.classList.add("hidden");
   }
