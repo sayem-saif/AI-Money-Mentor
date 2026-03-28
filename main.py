@@ -157,26 +157,40 @@ def analyze() -> Any:
     try:
         print("[API] Starting AI Money Mentor multi-agent analysis...")
         use_model_mode = os.getenv("USE_MODEL_AGENT", "true").strip().lower() == "true"
+        deterministic_fallback = (
+            os.getenv("ALLOW_DETERMINISTIC_FALLBACK", "true").strip().lower() == "true"
+        )
+        has_openrouter_keys = bool(
+            os.getenv("OPENROUTER_API_KEY", "").strip() or os.getenv("OPENROUTER_API_KEYS", "").strip()
+        )
+
         if use_model_mode:
             print("[API] Using OpenRouter model orchestration mode...")
-            try:
-                report = run_orchestration_with_model(payload)
-                if not _is_model_response_usable(report):
-                    print("[API] Model output schema mismatch detected, repairing response...")
-                    report = _repair_with_deterministic_schema(report, payload)
-            except Exception as model_exc:
-                print(f"[API] Model chain failed: {model_exc}")
-                deterministic_fallback = (
-                    os.getenv("ALLOW_DETERMINISTIC_FALLBACK", "false").strip().lower() == "true"
-                )
+            if not has_openrouter_keys:
                 if deterministic_fallback:
-                    print("[API] Falling back to deterministic local orchestration...")
+                    print("[API] OpenRouter keys missing. Falling back to deterministic local orchestration...")
                     report = run_orchestration(payload)
                     report["model_provider"] = "deterministic-fallback"
                     report["model_used"] = "local-python-tools"
-                    report["fallback_reason"] = str(model_exc)
+                    report["fallback_reason"] = "OPENROUTER_API_KEY/OPENROUTER_API_KEYS missing"
                 else:
-                    raise
+                    raise RuntimeError("OPENROUTER_API_KEY/OPENROUTER_API_KEYS missing and fallback disabled")
+            else:
+                try:
+                    report = run_orchestration_with_model(payload)
+                    if not _is_model_response_usable(report):
+                        print("[API] Model output schema mismatch detected, repairing response...")
+                        report = _repair_with_deterministic_schema(report, payload)
+                except Exception as model_exc:
+                    print(f"[API] Model chain failed: {model_exc}")
+                    if deterministic_fallback:
+                        print("[API] Falling back to deterministic local orchestration...")
+                        report = run_orchestration(payload)
+                        report["model_provider"] = "deterministic-fallback"
+                        report["model_used"] = "local-python-tools"
+                        report["fallback_reason"] = str(model_exc)
+                    else:
+                        raise
         else:
             print("[API] Using deterministic orchestration mode...")
             report = run_orchestration(payload)
