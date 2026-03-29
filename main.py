@@ -22,36 +22,53 @@ CORS(app)
 AUDIT_LOG_FILE = Path("audit_trail.jsonl")
 
 
+def _resolve_audit_log_file() -> Path:
+    # Vercel/serverless filesystems are read-only except /tmp.
+    if os.getenv("VERCEL"):
+        return Path("/tmp/audit_trail.jsonl")
+    return AUDIT_LOG_FILE
+
+
 def _append_audit_log(endpoint: str, status: str, payload: Dict[str, Any], response: Dict[str, Any]) -> None:
-    AUDIT_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    record = {
-        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
-        "endpoint": endpoint,
-        "status": status,
-        "input": payload,
-        "output_summary": {
-            "health_score": response.get("health_score") if isinstance(response, dict) else None,
-            "keys": list(response.keys())[:15] if isinstance(response, dict) else [],
-        },
-    }
-    with AUDIT_LOG_FILE.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    try:
+        audit_file = _resolve_audit_log_file()
+        audit_file.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "endpoint": endpoint,
+            "status": status,
+            "input": payload,
+            "output_summary": {
+                "health_score": response.get("health_score") if isinstance(response, dict) else None,
+                "keys": list(response.keys())[:15] if isinstance(response, dict) else [],
+            },
+        }
+        with audit_file.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as exc:
+        # Logging must not break API responses.
+        print(f"[Audit] Failed to append audit log: {exc}")
 
 
 def _read_audit_logs(limit: int = 100) -> list[Dict[str, Any]]:
-    if not AUDIT_LOG_FILE.exists():
+    try:
+        audit_file = _resolve_audit_log_file()
+        if not audit_file.exists():
+            return []
+        rows: list[Dict[str, Any]] = []
+        with audit_file.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                text = line.strip()
+                if not text:
+                    continue
+                try:
+                    rows.append(json.loads(text))
+                except json.JSONDecodeError:
+                    continue
+        return rows[-limit:][::-1]
+    except Exception as exc:
+        print(f"[Audit] Failed to read audit logs: {exc}")
         return []
-    rows: list[Dict[str, Any]] = []
-    with AUDIT_LOG_FILE.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            text = line.strip()
-            if not text:
-                continue
-            try:
-                rows.append(json.loads(text))
-            except json.JSONDecodeError:
-                continue
-    return rows[-limit:][::-1]
 
 
 def _has_required_fields(item: Any, required: list[str]) -> bool:
