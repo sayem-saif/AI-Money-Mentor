@@ -140,7 +140,13 @@ def _get_openrouter_api_keys() -> list[str]:
     return valid
 
 
-def _run_openrouter_model(user_data: Dict[str, Any]) -> Dict[str, Any]:
+def _run_openrouter_model(
+    user_data: Dict[str, Any],
+    *,
+    system_prompt: str | None = None,
+    user_prompt: str | None = None,
+    temperature: float = 0.2,
+) -> Dict[str, Any]:
     openrouter_api_keys = _get_openrouter_api_keys()
     if not openrouter_api_keys:
         raise RuntimeError("OPENROUTER_API_KEY or OPENROUTER_API_KEYS is required.")
@@ -154,23 +160,26 @@ def _run_openrouter_model(user_data: Dict[str, Any]) -> Dict[str, Any]:
     endpoint = f"{base_url}/chat/completions"
     print(f"[Orchestrator] Using OpenRouter model: {model_name}")
 
-    system_prompt = (
+    resolved_system_prompt = system_prompt or (
         "You are AI Money Mentor. Generate valid JSON only with keys: health_score, score_breakdown, "
         "fire_data, goals_sip, gaps, roadmap, priority_actions, summary. No markdown."
     )
-    user_prompt = f"{MODEL_INSTRUCTION_PREFIX}Input payload: {json.dumps(user_data, ensure_ascii=False)}"
+    resolved_user_prompt = user_prompt or (
+        f"{MODEL_INSTRUCTION_PREFIX}Input payload: {json.dumps(user_data, ensure_ascii=False)}"
+    )
     payload = {
         "model": model_name,
-        "temperature": 0.2,
+        "temperature": temperature,
         "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            {"role": "system", "content": resolved_system_prompt},
+            {"role": "user", "content": resolved_user_prompt},
         ],
     }
 
     key_errors: list[str] = []
+    total_keys = len(openrouter_api_keys)
     for index, api_key in enumerate(openrouter_api_keys, start=1):
-        print(f"[Orchestrator] Trying OpenRouter key #{index}...")
+        print(f"[Orchestrator] Trying configured OpenRouter API key {index}/{total_keys}...")
         data = json.dumps(payload).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
@@ -213,4 +222,41 @@ def run_orchestration_with_model(user_data: Dict[str, Any]) -> Dict[str, Any]:
     result = _run_openrouter_model(user_data)
     result["model_provider"] = "openrouter"
     result["model_used"] = os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-20b")
+    return result
+
+
+def run_orchestration_with_model_schema_fix(
+    user_data: Dict[str, Any], invalid_report: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Second-pass OpenRouter call to repair schema while remaining API-only."""
+    repair_system_prompt = (
+        "You are a strict JSON schema repair assistant for AI Money Mentor. "
+        "Return only valid JSON and no markdown. "
+        "Mandatory top-level keys: health_score, score_breakdown, fire_data, goals_sip, gaps, roadmap, "
+        "priority_actions, summary."
+    )
+    repair_user_prompt = (
+        "The previous model output did not pass schema validation. "
+        "Rewrite it into valid JSON with this structure requirements:\n"
+        "- health_score: number\n"
+        "- score_breakdown: object\n"
+        "- fire_data: object with fire_number_inr or fire_number\n"
+        "- goals_sip: array of objects each with name, target_amount, years, required_monthly_sip\n"
+        "- gaps: array of objects each with gap_type, severity, current_value, recommended_value, action\n"
+        "- roadmap: array of objects each with month, action\n"
+        "- priority_actions: array\n"
+        "- summary: string\n"
+        f"Original user input: {json.dumps(user_data, ensure_ascii=False)}\n"
+        f"Invalid model output to repair: {json.dumps(invalid_report, ensure_ascii=False)}"
+    )
+
+    result = _run_openrouter_model(
+        user_data,
+        system_prompt=repair_system_prompt,
+        user_prompt=repair_user_prompt,
+        temperature=0,
+    )
+    result["model_provider"] = "openrouter"
+    result["model_used"] = os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-20b")
+    result["schema_repaired_by_model"] = True
     return result

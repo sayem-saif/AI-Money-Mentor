@@ -1,6 +1,6 @@
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
 
-from agents import run_orchestration, run_orchestration_with_model
+from agents import run_orchestration_with_model, run_orchestration_with_model_schema_fix
 from agents.fire_calculator_agent import calculate_fire
 from agents.portfolio_xray_agent import run_portfolio_xray
 from agents.tax_wizard_agent import run_tax_wizard
@@ -25,7 +25,7 @@ AUDIT_LOG_FILE = Path("audit_trail.jsonl")
 def _append_audit_log(endpoint: str, status: str, payload: Dict[str, Any], response: Dict[str, Any]) -> None:
     AUDIT_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     record = {
-        "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "endpoint": endpoint,
         "status": status,
         "input": payload,
@@ -108,31 +108,6 @@ def _is_model_response_usable(report: Dict[str, Any]) -> bool:
     return True
 
 
-def _repair_with_deterministic_schema(model_report: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Keep model narrative when possible, but guarantee frontend-safe schema."""
-    deterministic_report = run_orchestration(payload)
-
-    # Preserve model narrative fields if they are present and non-empty.
-    if isinstance(model_report, dict):
-        summary = model_report.get("summary")
-        if isinstance(summary, str) and summary.strip():
-            deterministic_report["summary"] = summary
-
-        motivation = model_report.get("motivational_message")
-        if isinstance(motivation, str) and motivation.strip():
-            deterministic_report["motivational_message"] = motivation
-
-        actions = model_report.get("priority_actions")
-        if isinstance(actions, list) and actions:
-            cleaned_actions = [str(item).strip() for item in actions if str(item).strip()]
-            if cleaned_actions:
-                deterministic_report["priority_actions"] = cleaned_actions[:5]
-
-    deterministic_report["model_provider"] = "schema-repair"
-    deterministic_report["model_used"] = "deterministic-guardrail"
-    return deterministic_report
-
-
 @app.route("/")
 def index() -> str:
     return render_template("index.html")
@@ -156,44 +131,24 @@ def analyze() -> Any:
 
     try:
         print("[API] Starting AI Money Mentor multi-agent analysis...")
-        use_model_mode = os.getenv("USE_MODEL_AGENT", "true").strip().lower() == "true"
-        deterministic_fallback = (
-            os.getenv("ALLOW_DETERMINISTIC_FALLBACK", "true").strip().lower() == "true"
-        )
         has_openrouter_keys = bool(
             os.getenv("OPENROUTER_API_KEY", "").strip() or os.getenv("OPENROUTER_API_KEYS", "").strip()
         )
+        if not has_openrouter_keys:
+            message = "OPENROUTER_API_KEY/OPENROUTER_API_KEYS is required. Local fallback is disabled by policy."
+            _append_audit_log("/api/analyze", "error", payload, {"error": message})
+            return jsonify({"error": message}), 503
 
-        if use_model_mode:
-            print("[API] Using OpenRouter model orchestration mode...")
-            if not has_openrouter_keys:
-                if deterministic_fallback:
-                    print("[API] OpenRouter keys missing. Falling back to deterministic local orchestration...")
-                    report = run_orchestration(payload)
-                    report["model_provider"] = "deterministic-fallback"
-                    report["model_used"] = "local-python-tools"
-                    report["fallback_reason"] = "OPENROUTER_API_KEY/OPENROUTER_API_KEYS missing"
-                else:
-                    raise RuntimeError("OPENROUTER_API_KEY/OPENROUTER_API_KEYS missing and fallback disabled")
-            else:
-                try:
-                    report = run_orchestration_with_model(payload)
-                    if not _is_model_response_usable(report):
-                        print("[API] Model output schema mismatch detected, repairing response...")
-                        report = _repair_with_deterministic_schema(report, payload)
-                except Exception as model_exc:
-                    print(f"[API] Model chain failed: {model_exc}")
-                    if deterministic_fallback:
-                        print("[API] Falling back to deterministic local orchestration...")
-                        report = run_orchestration(payload)
-                        report["model_provider"] = "deterministic-fallback"
-                        report["model_used"] = "local-python-tools"
-                        report["fallback_reason"] = str(model_exc)
-                    else:
-                        raise
-        else:
-            print("[API] Using deterministic orchestration mode...")
-            report = run_orchestration(payload)
+        print("[API] Using OpenRouter model orchestration mode (strict API-key-only)...")
+        report = run_orchestration_with_model(payload)
+        if not _is_model_response_usable(report):
+            print("[API] Schema validation failed. Retrying with API-based schema repair...")
+            report = run_orchestration_with_model_schema_fix(payload, report)
+            if not _is_model_response_usable(report):
+                message = "Model output schema validation failed after API repair retry. No deterministic/local fallback is allowed."
+                _append_audit_log("/api/analyze", "error", payload, {"error": message})
+                return jsonify({"error": message}), 502
+
         print("[API] Analysis complete.")
         _append_audit_log("/api/analyze", "success", payload, report)
         return jsonify(report)
@@ -281,45 +236,6 @@ def recalculate() -> Any:
     except Exception as exc:
         _append_audit_log("/api/recalculate", "error", payload, {"error": str(exc)})
         return jsonify({"error": "Failed to recalculate.", "details": str(exc)}), 500
-
-
-@app.route("/api/get-demo-data", methods=["GET"])
-def get_demo_data() -> Any:
-    """Returns hardcoded demo data for dashboard form."""
-    demo_data = {
-        "name": "Arjun Sharma",
-        "age": "34",
-        "monthly_income": "200000",
-        "monthly_expenses": "80000",
-        "existing_savings": "50000",
-        "existing_investments": "1800000",
-        "emergency_fund": "30000",
-        "risk_appetite": "moderate",
-        "has_term_insurance": "false",
-        "has_health_insurance": "true",
-        "goals": [
-            {"name": "Emergency Fund Top-up", "target_amount": 270000, "years": 1},
-            {"name": "Europe Trip", "target_amount": 300000, "years": 2},
-            {"name": "Home Down Payment", "target_amount": 2000000, "years": 7},
-            {"name": "Retirement Corpus", "target_amount": 30000000, "years": 16}
-        ]
-    }
-    return jsonify(demo_data)
-
-
-@app.route("/api/get-demo-data-tax", methods=["GET"])
-def get_demo_data_tax() -> Any:
-    """Returns hardcoded demo data for tax wizard form."""
-    demo_data = {
-        "annual_income": "1800000",
-        "deductions_80c": "150000",
-        "hra_exemption": "360000",
-        "home_loan_interest": "40000",
-        "nps_contribution": "50000",
-        "city_type": "metro",
-        "monthly_rent": "30000"
-    }
-    return jsonify(demo_data)
 
 
 @app.errorhandler(404)

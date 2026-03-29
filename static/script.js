@@ -17,16 +17,13 @@ const fundsList = document.getElementById("funds-list");
 const recalculateBtn = document.getElementById("recalculate-btn");
 
 let latestProfilePayload = null;
-let analyzeRequestInFlight = false;
 
 async function apiFetch(path, options = {}) {
   try {
     return await fetch(path, options);
   } catch (error) {
-    const hostname = window.location.hostname || "";
-    const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
     const currentPort = window.location.port;
-    const shouldTryFallback = isLocalHost && currentPort !== "5000";
+    const shouldTryFallback = currentPort !== "5000";
     if (!shouldTryFallback) {
       throw error;
     }
@@ -237,6 +234,71 @@ function renderScoreBreakdown(breakdown) {
   });
 }
 
+function clampScore(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 0;
+  return Math.max(0, Math.min(20, num));
+}
+
+function normalizeScoreBreakdown(rawBreakdown, healthScore = 0) {
+  const raw = rawBreakdown && typeof rawBreakdown === "object" ? rawBreakdown : {};
+
+  // If API already returns UI-compatible category keys, use them directly.
+  const requiredKeys = [
+    "emergency_preparedness",
+    "insurance_coverage",
+    "investment_diversification",
+    "debt_health",
+    "tax_efficiency",
+    "retirement_readiness",
+  ];
+  const hasUiKeys = requiredKeys.every((key) => key in raw);
+  if (hasUiKeys) {
+    return {
+      emergency_preparedness: clampScore(raw.emergency_preparedness),
+      insurance_coverage: clampScore(raw.insurance_coverage),
+      investment_diversification: clampScore(raw.investment_diversification),
+      debt_health: clampScore(raw.debt_health),
+      tax_efficiency: clampScore(raw.tax_efficiency),
+      retirement_readiness: clampScore(raw.retirement_readiness),
+    };
+  }
+
+  // Map alternate API keys to the UI categories.
+  const liquidity = Number(raw.liquidity);
+  const savingsRate = Number(raw.savings_rate);
+  const debtToIncome = Number(raw.debt_to_income);
+  const riskAppetite = String(raw.risk_appetite || "").toLowerCase();
+  const health = Number(healthScore || 0);
+
+  const emergencyPreparedness = Number.isFinite(liquidity)
+    ? clampScore(liquidity <= 1 ? liquidity * 20 : liquidity)
+    : 10;
+
+  const debtHealth = Number.isFinite(debtToIncome)
+    ? clampScore(debtToIncome <= 1 ? (1 - debtToIncome) * 20 : 20 - debtToIncome)
+    : 10;
+
+  const investmentDiversification =
+    riskAppetite === "high" ? 15 : riskAppetite === "moderate" ? 12 : riskAppetite === "low" ? 10 : 11;
+
+  const retirementReadiness = Number.isFinite(savingsRate)
+    ? clampScore(savingsRate <= 1 ? savingsRate * 20 : savingsRate)
+    : clampScore((health / 100) * 20);
+
+  const insuranceCoverage = clampScore((health / 100) * 20 * 0.75);
+  const taxEfficiency = clampScore((health / 100) * 20 * 0.65);
+
+  return {
+    emergency_preparedness: emergencyPreparedness,
+    insurance_coverage: insuranceCoverage,
+    investment_diversification: investmentDiversification,
+    debt_health: debtHealth,
+    tax_efficiency: taxEfficiency,
+    retirement_readiness: retirementReadiness,
+  };
+}
+
 function renderScoreBars(breakdown) {
   const barsContainer = document.getElementById("score-bars");
   if (!barsContainer) return;
@@ -277,142 +339,112 @@ function renderScoreBars(breakdown) {
 
 function renderResults(data) {
   renderGauge(data.health_score);
-  renderScoreBreakdown(data.score_breakdown || {});
-  renderScoreBars(data.score_breakdown || {});
+  const normalizedBreakdown = normalizeScoreBreakdown(data.score_breakdown || {}, data.health_score || 0);
+  renderScoreBreakdown(normalizedBreakdown);
+  renderScoreBars(normalizedBreakdown);
 
   const fire = data.fire_data || {};
-  const fireSummary = document.getElementById("fire-summary");
-  if (fireSummary) {
-    fireSummary.innerHTML = `
-      <p><strong>FIRE Number:</strong> ${fire.fire_number_inr || formatINR(fire.fire_number)}</p>
-      <p><strong>Years to FIRE:</strong> ${fire.years_to_fire ?? "N/A"}</p>
-      <p><strong>Total SIP Needed:</strong> ${fire.monthly_sip_needed_inr || formatINR(fire.monthly_sip_needed)}</p>
-      <p><strong>Allocation:</strong> Equity ${fire.asset_allocation?.equity_percent ?? "-"}% | Debt ${fire.asset_allocation?.debt_percent ?? "-"}%</p>
-    `;
-  }
+  document.getElementById("fire-summary").innerHTML = `
+    <p><strong>FIRE Number:</strong> ${fire.fire_number_inr || formatINR(fire.fire_number)}</p>
+    <p><strong>Years to FIRE:</strong> ${fire.years_to_fire ?? "N/A"}</p>
+    <p><strong>Total SIP Needed:</strong> ${fire.monthly_sip_needed_inr || formatINR(fire.monthly_sip_needed)}</p>
+    <p><strong>Allocation:</strong> Equity ${fire.asset_allocation?.equity_percent ?? "-"}% | Debt ${fire.asset_allocation?.debt_percent ?? "-"}%</p>
+  `;
 
   const goalsBody = document.getElementById("goals-table-body");
-  if (goalsBody) {
-    goalsBody.innerHTML = "";
-    (data.goals_sip || []).forEach((goal) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${escapeHtml(goal.name)}</td>
-        <td>${formatINR(goal.target_amount)}</td>
-        <td>${goal.years}</td>
-        <td>${goal.required_monthly_sip_inr || formatINR(goal.required_monthly_sip)}</td>
-      `;
-      goalsBody.appendChild(tr);
-    });
-  }
+  goalsBody.innerHTML = "";
+  (data.goals_sip || []).forEach((goal) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(goal.name)}</td>
+      <td>${formatINR(goal.target_amount)}</td>
+      <td>${goal.years}</td>
+      <td>${goal.required_monthly_sip_inr || formatINR(goal.required_monthly_sip)}</td>
+    `;
+    goalsBody.appendChild(tr);
+  });
 
   const gaps = document.getElementById("gap-cards");
-  if (gaps) {
-    gaps.innerHTML = "";
-    (data.gaps || []).forEach((gap) => {
-      const level = String(gap.severity || "low").toLowerCase();
-      const card = document.createElement("div");
-      card.className = `gap-card gap-${level}`;
-      card.innerHTML = `
-        <h3>${escapeHtml(gap.gap_type)} (${escapeHtml(gap.severity)})</h3>
-        <p><strong>Current:</strong> ${escapeHtml(gap.current_value)}</p>
-        <p><strong>Recommended:</strong> ${escapeHtml(gap.recommended_value)}</p>
-        <p>${escapeHtml(gap.action)}</p>
-        <button class="ghost-btn">Learn How -></button>
-      `;
-      gaps.appendChild(card);
-    });
-  }
+  gaps.innerHTML = "";
+  (data.gaps || []).forEach((gap) => {
+    const level = String(gap.severity || "low").toLowerCase();
+    const card = document.createElement("div");
+    card.className = `gap-card gap-${level}`;
+    card.innerHTML = `
+      <h3>${escapeHtml(gap.gap_type)} (${escapeHtml(gap.severity)})</h3>
+      <p><strong>Current:</strong> ${escapeHtml(gap.current_value)}</p>
+      <p><strong>Recommended:</strong> ${escapeHtml(gap.recommended_value)}</p>
+      <p>${escapeHtml(gap.action)}</p>
+      <button class="ghost-btn">Learn How -></button>
+    `;
+    gaps.appendChild(card);
+  });
 
   const actions = document.getElementById("priority-actions");
-  if (actions) {
-    actions.innerHTML = "";
-    (data.priority_actions || []).forEach((action) => {
-      const li = document.createElement("li");
-      if (typeof action === "string") {
-        li.textContent = action;
-      } else if (action && typeof action === "object") {
-        const label = action.priority ? `[${action.priority}] ` : "";
-        li.textContent = `${label}${action.action || action.step || "Action item"}`;
-      } else {
-        li.textContent = String(action || "Action item");
-      }
-      actions.appendChild(li);
-    });
-  }
+  actions.innerHTML = "";
+  (data.priority_actions || []).forEach((action) => {
+    const li = document.createElement("li");
+    if (typeof action === "string") {
+      li.textContent = action;
+    } else if (action && typeof action === "object") {
+      const label = action.priority ? `[${action.priority}] ` : "";
+      li.textContent = `${label}${action.action || action.step || "Action item"}`;
+    } else {
+      li.textContent = String(action || "Action item");
+    }
+    actions.appendChild(li);
+  });
 
   const roadmap = document.getElementById("roadmap");
-  if (roadmap) {
-    roadmap.innerHTML = "";
-    (data.roadmap || []).forEach((item) => {
-      const div = document.createElement("div");
-      div.className = "road-item";
-      div.innerHTML = `<strong>Month ${item.month}:</strong> ${escapeHtml(item.action)}`;
-      roadmap.appendChild(div);
-    });
-  }
+  roadmap.innerHTML = "";
+  (data.roadmap || []).forEach((item) => {
+    const div = document.createElement("div");
+    div.className = "road-item";
+    div.innerHTML = `<strong>Month ${item.month}:</strong> ${escapeHtml(item.action)}`;
+    roadmap.appendChild(div);
+  });
 
-  const summaryText = document.getElementById("summary-text");
-  if (summaryText) summaryText.textContent = data.summary || "";
-
-  const motivationText = document.getElementById("motivation-text");
-  if (motivationText) motivationText.textContent = data.motivational_message || "";
+  document.getElementById("summary-text").textContent = data.summary || "";
+  document.getElementById("motivation-text").textContent = data.motivational_message || "";
 }
 
-async function loadDemoData() {
-  try {
-    const response = await fetch("/api/get-demo-data");
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    const data = await response.json();
-    
-    const setIfExists = (selector, value) => {
-      const el = document.querySelector(selector);
-      if (el) el.value = value;
-    };
-    
-    setIfExists("input[name='name']", data.name);
-    setIfExists("input[name='age']", data.age);
-    setIfExists("input[name='monthly_income']", data.monthly_income);
-    setIfExists("input[name='monthly_expenses']", data.monthly_expenses);
-    setIfExists("input[name='existing_savings']", data.existing_savings);
-    setIfExists("input[name='existing_investments']", data.existing_investments);
-    setIfExists("input[name='emergency_fund']", data.emergency_fund);
-    setIfExists("select[name='risk_appetite']", data.risk_appetite);
-    setIfExists("input[name='has_term_insurance']", data.has_term_insurance);
-    setIfExists("input[name='has_health_insurance']", data.has_health_insurance);
-    
-    goalsList.innerHTML = "";
-    if (data.goals && Array.isArray(data.goals)) {
-      data.goals.forEach(goal => addGoalRow(goal));
-    }
-  } catch (error) {
-    console.error("Failed to load demo data:", error);
-    alert("Failed to load demo data. Please check the console.");
-  }
+function loadDemoData() {
+  const setIfExists = (selector, value) => {
+    const el = document.querySelector(selector);
+    if (el) el.value = value;
+  };
+  
+  setIfExists("input[name='name']", "Arjun Sharma");
+  setIfExists("input[name='age']", "34");
+  setIfExists("input[name='monthly_income']", "200000");
+  setIfExists("input[name='monthly_expenses']", "80000");
+  setIfExists("input[name='existing_savings']", "50000");
+  setIfExists("input[name='existing_investments']", "1800000");
+  setIfExists("input[name='emergency_fund']", "30000");
+  setIfExists("select[name='risk_appetite']", "moderate");
+  setIfExists("input[name='has_term_insurance']", "false");
+  setIfExists("input[name='has_health_insurance']", "true");
+  
+  goalsList.innerHTML = "";
+  addGoalRow({ name: "Emergency Fund Top-up", target_amount: 270000, years: 1 });
+  addGoalRow({ name: "Europe Trip", target_amount: 300000, years: 2 });
+  addGoalRow({ name: "Home Down Payment", target_amount: 2000000, years: 7 });
+  addGoalRow({ name: "Retirement Corpus", target_amount: 30000000, years: 16 });
 }
 
-async function loadDemoDataTax() {
-  try {
-    const response = await fetch("/api/get-demo-data-tax");
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    const data = await response.json();
-    
-    const setIfExists = (selector, value) => {
-      const el = document.querySelector(selector);
-      if (el) el.value = value;
-    };
-    
-    setIfExists("input[name='annual_income']", data.annual_income);
-    setIfExists("input[name='deductions_80c']", data.deductions_80c);
-    setIfExists("input[name='hra_exemption']", data.hra_exemption);
-    setIfExists("input[name='home_loan_interest']", data.home_loan_interest);
-    setIfExists("input[name='nps_contribution']", data.nps_contribution);
-    setIfExists("select[name='city_type']", data.city_type);
-    setIfExists("input[name='monthly_rent']", data.monthly_rent);
-  } catch (error) {
-    console.error("Failed to load tax demo data:", error);
-    alert("Failed to load tax demo data. Please check the console.");
-  }
+function loadDemoDataTax() {
+  const setIfExists = (selector, value) => {
+    const el = document.querySelector(selector);
+    if (el) el.value = value;
+  };
+  
+  setIfExists("input[name='annual_income']", "1800000");
+  setIfExists("input[name='deductions_80c']", "150000");
+  setIfExists("input[name='hra_exemption']", "360000");
+  setIfExists("input[name='home_loan_interest']", "40000");
+  setIfExists("input[name='nps_contribution']", "50000");
+  setIfExists("select[name='city_type']", "metro");
+  setIfExists("input[name='monthly_rent']", "30000");
 }
 
 function renderTaxResults(data) {
@@ -623,9 +655,6 @@ async function loadAuditTrail() {
 
 if (form) form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (analyzeRequestInFlight) {
-    return;
-  }
 
   const formData = new FormData(form);
   const payload = {
@@ -647,13 +676,10 @@ if (form) form.addEventListener("submit", async (event) => {
     return;
   }
 
-  analyzeRequestInFlight = true;
   latestProfilePayload = payload;
   results.classList.add("hidden");
   loadingCard.classList.remove("hidden");
   const timer = startLoadingAnimation();
-  const submitBtn = form.querySelector("button[type='submit']");
-  if (submitBtn) submitBtn.disabled = true;
 
   try {
     const response = await apiFetch("/api/analyze", {
@@ -668,12 +694,8 @@ if (form) form.addEventListener("submit", async (event) => {
     results.classList.remove("hidden");
     results.scrollIntoView({ behavior: "smooth" });
   } catch (error) {
-    const message = error?.message || "Something went wrong while analyzing your finances.";
-    alert(message);
-    console.error("Analyze request failed:", error);
+    alert(error.message || "Something went wrong while analyzing your finances.");
   } finally {
-    analyzeRequestInFlight = false;
-    if (submitBtn) submitBtn.disabled = false;
     clearInterval(timer);
     loadingCard.classList.add("hidden");
   }
