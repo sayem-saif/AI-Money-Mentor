@@ -17,6 +17,7 @@ const fundsList = document.getElementById("funds-list");
 const recalculateBtn = document.getElementById("recalculate-btn");
 
 let latestProfilePayload = null;
+let latestAnalyzeResponse = null;
 
 async function apiFetch(path, options = {}) {
   try {
@@ -338,6 +339,7 @@ function renderScoreBars(breakdown) {
 }
 
 function renderResults(data) {
+  latestAnalyzeResponse = data;
   renderGauge(data.health_score);
   const normalizedBreakdown = normalizeScoreBreakdown(data.score_breakdown || {}, data.health_score || 0);
   renderScoreBreakdown(normalizedBreakdown);
@@ -375,8 +377,43 @@ function renderResults(data) {
       <p><strong>Current:</strong> ${escapeHtml(gap.current_value)}</p>
       <p><strong>Recommended:</strong> ${escapeHtml(gap.recommended_value)}</p>
       <p>${escapeHtml(gap.action)}</p>
-      <button class="ghost-btn">Learn How -></button>
+      <button type="button" class="ghost-btn learn-more-gap-btn">Learn How -></button>
     `;
+    const learnBtn = card.querySelector(".learn-more-gap-btn");
+    if (learnBtn) {
+      learnBtn.addEventListener("click", async () => {
+        const originalLabel = learnBtn.textContent;
+        learnBtn.disabled = true;
+        learnBtn.textContent = "Loading...";
+        try {
+          const response = await apiFetch("/api/gap-action-plan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              gap,
+              profile: latestProfilePayload || {},
+              context: {
+                health_score: latestAnalyzeResponse?.health_score,
+                summary: latestAnalyzeResponse?.summary,
+              },
+            }),
+          });
+          const planData = await parseApiJson(response, "Could not load action plan");
+          const points = Array.isArray(planData.five_point_plan) ? planData.five_point_plan.slice(0, 5) : [];
+          if (!points.length) {
+            throw new Error("No action points returned by model API.");
+          }
+          const title = planData.title || gap.gap_type || "How to Fix This Gap";
+          const message = [`${title}`, "", ...points.map((item, idx) => `${idx + 1}. ${item}`)].join("\n");
+          alert(message);
+        } catch (error) {
+          alert(error.message || "Failed to fetch Learn How details.");
+        } finally {
+          learnBtn.disabled = false;
+          learnBtn.textContent = originalLabel;
+        }
+      });
+    }
     gaps.appendChild(card);
   });
 

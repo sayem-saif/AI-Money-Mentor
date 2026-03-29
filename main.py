@@ -8,7 +8,11 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
 
-from agents import run_orchestration_with_model, run_orchestration_with_model_schema_fix
+from agents import (
+    generate_gap_action_plan_with_model,
+    run_orchestration_with_model,
+    run_orchestration_with_model_schema_fix,
+)
 from agents.fire_calculator_agent import calculate_fire
 from agents.portfolio_xray_agent import run_portfolio_xray
 from agents.tax_wizard_agent import run_tax_wizard
@@ -209,6 +213,29 @@ def portfolio_xray() -> Any:
     except Exception as exc:
         _append_audit_log("/api/portfolio-xray", "error", payload, {"error": str(exc)})
         return jsonify({"error": "Failed to run portfolio x-ray.", "details": str(exc)}), 500
+
+
+@app.route("/api/gap-action-plan", methods=["POST"])
+def gap_action_plan() -> Any:
+    payload: Dict[str, Any] = request.get_json(silent=True) or {}
+    gap = payload.get("gap")
+    profile = payload.get("profile")
+    if not isinstance(gap, dict):
+        return jsonify({"error": "gap object is required."}), 400
+
+    has_openrouter_keys = bool(
+        os.getenv("OPENROUTER_API_KEY", "").strip() or os.getenv("OPENROUTER_API_KEYS", "").strip()
+    )
+    if not has_openrouter_keys:
+        return jsonify({"error": "OPENROUTER_API_KEY/OPENROUTER_API_KEYS is required."}), 503
+
+    try:
+        result = generate_gap_action_plan_with_model(gap=gap, profile=profile if isinstance(profile, dict) else {})
+        _append_audit_log("/api/gap-action-plan", "success", payload, result)
+        return jsonify(result)
+    except Exception as exc:
+        _append_audit_log("/api/gap-action-plan", "error", payload, {"error": str(exc)})
+        return jsonify({"error": "Failed to generate action plan.", "details": str(exc)}), 500
 
 
 @app.route("/api/audit-log", methods=["GET"])

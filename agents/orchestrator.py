@@ -260,3 +260,46 @@ def run_orchestration_with_model_schema_fix(
     result["model_used"] = os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-20b")
     result["schema_repaired_by_model"] = True
     return result
+
+
+def generate_gap_action_plan_with_model(
+    gap: Dict[str, Any], profile: Dict[str, Any] | None = None
+) -> Dict[str, Any]:
+    """Generate exactly five concise, actionable steps for a specific gap using OpenRouter only."""
+    safe_gap = gap if isinstance(gap, dict) else {}
+    safe_profile = profile if isinstance(profile, dict) else {}
+
+    system_prompt = (
+        "You are a personal finance action planner. "
+        "Return valid JSON only. No markdown, no extra text."
+    )
+    user_prompt = (
+        "Create exactly 5 short actionable points to fix this financial gap. "
+        "Keep each point under 18 words and practical for an Indian retail investor. "
+        "Output strictly in this JSON format: "
+        '{"title":"...","five_point_plan":["...","...","...","...","..."]}. '
+        f"Gap data: {json.dumps(safe_gap, ensure_ascii=False)}. "
+        f"Profile context: {json.dumps(safe_profile, ensure_ascii=False)}"
+    )
+
+    result = _run_openrouter_model(
+        {"gap": safe_gap, "profile": safe_profile},
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        temperature=0.2,
+    )
+
+    plan = result.get("five_point_plan")
+    if not isinstance(plan, list):
+        raise ValueError("Model did not return five_point_plan array")
+
+    cleaned_plan = [str(item).strip() for item in plan if str(item).strip()][:5]
+    if len(cleaned_plan) < 5:
+        raise ValueError("Model returned fewer than 5 actionable points")
+
+    return {
+        "title": str(result.get("title") or safe_gap.get("gap_type") or "How to Fix This Gap"),
+        "five_point_plan": cleaned_plan,
+        "model_provider": "openrouter",
+        "model_used": os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-20b"),
+    }
