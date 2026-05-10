@@ -18,8 +18,8 @@ AI Money Mentor is a multi-agent personal finance advisory system built for **ET
 
 ## Tech Stack
 
-- Python 3.10+
-- Google ADK (`google-adk`)
+- Python 3.14
+- Google ADK (`google-adk`) or as per your prefrenc
 - Flask + Flask-CORS
 - HTML, CSS, JavaScript (single page UI)
 - python-dotenv
@@ -58,19 +58,11 @@ ai-money-mentor/
    ```bash
    pip install -r requirements.txt
    ```
-3. Create `.env` from `.env.example` and add your OpenRouter settings:
-   ```env
-   OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-   OPENROUTER_API_KEY=your_sk-or-v1_key
-   OPENROUTER_MODEL=openai/gpt-oss-20b
-   OPENROUTER_SITE_URL=https://your-site.example
-   OPENROUTER_APP_NAME=AI Money Mentor
-   ```
-4. Start the app:
+3. Start the app:
    ```bash
    python main.py
    ```
-5. Open `http://localhost:5000`.
+4. Open `http://localhost:5000`.
 
 ## Agents
 
